@@ -39,7 +39,7 @@ export default function TranscriptViewer({ utterances, speakerNames, onReassign,
   const matches = q ? utterances.filter((u) => u.text.toLowerCase().includes(q.toLowerCase())).length : 0;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-surface shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <h2 className="flex items-center gap-2 font-semibold text-slate-900">
           <FileText className="h-4 w-4 text-slate-500" /> {t("transcript.title")}

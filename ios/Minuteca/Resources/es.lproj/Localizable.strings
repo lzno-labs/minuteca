@@ -50,12 +50,13 @@
 
 "list.title" = "Grabaciones";
 "list.empty" = "Aún no hay grabaciones.";
+"list.emptyHint" = "Lo que grabes aparece aquí y se sube solo a minuteca.";
 "list.recovered" = "Recuperada después de que se cerró la app.";
 
 "state.recording" = "Grabando";
 "state.waiting" = "Esperando para subir";
 "state.uploading" = "Subiendo";
-"state.uploaded" = "En minuteca: transcríbela en la web";
+"state.uploaded" = "En minuteca: tócala para verla en la web";
 "state.offline" = "Sin señal: se subirá sola";
 "state.signedOut" = "Vuelve a entrar para subirla";
 "state.tooLarge" = "Demasiado grande para subirla";

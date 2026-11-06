@@ -9,7 +9,7 @@ export default function LanguageSwitch({ className = "" }) {
       role="group"
       aria-label={t("common.interfaceLanguage")}
       title={t("common.interfaceLanguage")}
-      className={`inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-surface p-0.5 text-xs font-semibold ${className}`}
     >
       <Languages className="ml-1 hidden h-3.5 w-3.5 text-slate-400 sm:block" aria-hidden />
       {LANGUAGES.map((l) => (

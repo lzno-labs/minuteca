@@ -7,7 +7,7 @@ const keysOf = (lang) =>
   new Set([...readFileSync(`${root}/Resources/${lang}/Localizable.strings`, "utf8").matchAll(/^"([^"]+)"\s*=/gm)].map((m) => m[1].replace(/%lld/g, "%@")));
 const tables = Object.fromEntries(langs.map((l) => [l, keysOf(l)]));
 const errors = [];
-const SYMBOL_ROOTS = new Set(["mic", "envelope", "lock", "icloud", "gearshape", "play", "pause", "stop", "checkmark", "exclamationmark", "safari"]);
+const SYMBOL_ROOTS = new Set(["mic", "envelope", "lock", "icloud", "gearshape", "play", "pause", "stop", "checkmark", "exclamationmark", "safari", "record", "phone", "arrow", "waveform"]);
 
 for (const f of readdirSync(root, { recursive: true }).filter((p) => String(p).endsWith(".swift"))) {
   const src = readFileSync(`${root}/${f}`, "utf8");

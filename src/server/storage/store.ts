@@ -1,6 +1,7 @@
 // Every SQL statement of minuteca, on top of the Db interface (SQLite or D1).
 import type { Db } from "./db.ts";
 import { isProvider, type Provider, type Transcript } from "../transcriber/transcriber.ts";
+import { isLlmProvider, type LlmProviderId } from "../llm/llm.ts";
 
 export type Role = "admin" | "member" | "removed";
 
@@ -11,7 +12,24 @@ export interface User {
   added_by: string | null;
   created_at: number;
   provider: Provider;
-  consents: Provider[];
+  /** Permissions to send data: transcription providers ("deepgram") and language models ("llm:anthropic"). */
+  consents: string[];
+  llmProvider: LlmProviderId | null;
+  /** Model chosen per language model provider; missing means the provider's default. */
+  llmModels: Partial<Record<LlmProviderId, string>>;
+  minutesInstructions: string;
+}
+
+export const isConsentId = (c: unknown): c is string =>
+  isProvider(c) || (typeof c === "string" && c.startsWith("llm:") && isLlmProvider(c.slice(4)));
+
+export interface MinutesRow {
+  body: string;
+  provider: string;
+  model: string;
+  edited: number;
+  created_at: number;
+  updated_at: number;
 }
 
 /** converting: the provider answered; the answer waits for the browser to turn it into a transcript. */
@@ -48,12 +66,17 @@ export const monthOf = (ms: number): string => new Date(ms).toISOString().slice(
 
 function userFrom(row: Record<string, unknown> | null): User | null {
   if (!row) return null;
-  let consents: Provider[] = [];
-  try {
-    consents = (JSON.parse(String(row.consents ?? "[]")) as unknown[]).filter(isProvider);
-  } catch {
-    consents = [];
-  }
+  const parse = <T,>(v: unknown, fallback: T): T => {
+    try {
+      return JSON.parse(String(v)) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  const consents = parse<unknown[]>(row.consents ?? "[]", []).filter(isConsentId);
+  const models = parse<Record<string, unknown>>(row.llm_models ?? "{}", {});
+  const llmModels: Partial<Record<LlmProviderId, string>> = {};
+  for (const [k, v] of Object.entries(models && typeof models === "object" ? models : {})) if (isLlmProvider(k) && typeof v === "string") llmModels[k] = v;
   return {
     id: String(row.id),
     email: String(row.email),
@@ -62,6 +85,9 @@ function userFrom(row: Record<string, unknown> | null): User | null {
     created_at: Number(row.created_at),
     provider: isProvider(row.provider) ? row.provider : "deepgram",
     consents,
+    llmProvider: isLlmProvider(row.llm_provider) ? row.llm_provider : null,
+    llmModels,
+    minutesInstructions: String(row.minutes_instructions ?? ""),
   };
 }
 
@@ -106,7 +132,10 @@ export class Store {
   async setProvider(userId: string, provider: Provider) {
     await this.db.run("UPDATE users SET provider = ? WHERE id = ?", [provider, userId]);
   }
-  async setConsents(userId: string, consents: Provider[]) {
+  async setLlmSettings(userId: string, s: { provider: LlmProviderId | null; models: Partial<Record<LlmProviderId, string>>; instructions: string }) {
+    await this.db.run("UPDATE users SET llm_provider = ?, llm_models = ?, minutes_instructions = ? WHERE id = ?", [s.provider, JSON.stringify(s.models), s.instructions, userId]);
+  }
+  async setConsents(userId: string, consents: string[]) {
     await this.db.run("UPDATE users SET consents = ? WHERE id = ?", [JSON.stringify([...new Set(consents)]), userId]);
   }
 
@@ -179,6 +208,7 @@ export class Store {
   async deleteMeeting(userId: string, id: string) {
     await this.db.batch([
       { sql: "DELETE FROM transcripts WHERE meeting_id IN (SELECT id FROM meetings WHERE id = ? AND user_id = ?)", params: [id, userId] },
+      { sql: "DELETE FROM minutes WHERE meeting_id IN (SELECT id FROM meetings WHERE id = ? AND user_id = ?)", params: [id, userId] },
       { sql: "DELETE FROM meetings WHERE id = ? AND user_id = ?", params: [id, userId] },
     ]);
   }
@@ -240,22 +270,59 @@ export class Store {
     await this.db.run("UPDATE meetings SET status = 'error', error = ?, job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')", [error, id]);
   }
 
+  /* ---------- minutes ---------- */
+
+  async minutes(meetingId: string) {
+    return this.db.first<MinutesRow>("SELECT body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ?", [meetingId]);
+  }
+  async saveMinutes(meetingId: string, m: { body: string; provider: string; model: string; edited: boolean }, now: number) {
+    await this.db.run(
+      `INSERT INTO minutes (meeting_id, body, provider, model, edited, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body, provider = excluded.provider, model = excluded.model, edited = excluded.edited, updated_at = excluded.updated_at`,
+      [meetingId, m.body, m.provider, m.model, m.edited ? 1 : 0, now, now],
+    );
+  }
+  async editMinutes(meetingId: string, body: string, now: number) {
+    const { changes } = await this.db.run("UPDATE minutes SET body = ?, edited = 1, updated_at = ? WHERE meeting_id = ?", [body, now, meetingId]);
+    return changes > 0;
+  }
+  async deleteMinutes(meetingId: string) {
+    await this.db.run("DELETE FROM minutes WHERE meeting_id = ?", [meetingId]);
+  }
+  async addLlmUsage(u: { userId: string; meetingId: string | null; provider: string; model: string; purpose: string; inputTokens: number; outputTokens: number; now: number }) {
+    await this.db.run(
+      "INSERT INTO llm_usage (user_id, meeting_id, provider, model, purpose, input_tokens, output_tokens, month, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [u.userId, u.meetingId, u.provider, u.model, u.purpose, u.inputTokens, u.outputTokens, monthOf(u.now), u.now],
+    );
+  }
+  async llmUsageOf(userId: string, month?: string) {
+    return month
+      ? this.db.all<{ provider: string; requests: number; input_tokens: number; output_tokens: number }>(
+          "SELECT provider, COUNT(*) AS requests, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens FROM llm_usage WHERE user_id = ? AND month = ? GROUP BY provider",
+          [userId, month],
+        )
+      : this.db.all<{ month: string; provider: string; requests: number; input_tokens: number; output_tokens: number }>(
+          "SELECT month, provider, COUNT(*) AS requests, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens FROM llm_usage WHERE user_id = ? GROUP BY month, provider ORDER BY month DESC",
+          [userId],
+        );
+  }
+
   /* ---------- provider keys ---------- */
 
   async providerKeys(userId: string) {
     return this.db.all<{ provider: string; last4: string; created_at: number }>("SELECT provider, last4, created_at FROM provider_keys WHERE user_id = ? ORDER BY provider", [userId]);
   }
-  async sealedKey(userId: string, provider: Provider) {
+  async sealedKey(userId: string, provider: string) {
     return this.db.first<{ ciphertext: string; iv: string }>("SELECT ciphertext, iv FROM provider_keys WHERE user_id = ? AND provider = ?", [userId, provider]);
   }
-  async saveProviderKey(userId: string, provider: Provider, k: { ciphertext: string; iv: string; last4: string; version: number }, now: number) {
+  async saveProviderKey(userId: string, provider: string, k: { ciphertext: string; iv: string; last4: string; version: number }, now: number) {
     await this.db.run(
       `INSERT INTO provider_keys (user_id, provider, ciphertext, iv, last4, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id, provider) DO UPDATE SET ciphertext = excluded.ciphertext, iv = excluded.iv, last4 = excluded.last4, version = excluded.version, created_at = excluded.created_at`,
       [userId, provider, k.ciphertext, k.iv, k.last4, k.version, now],
     );
   }
-  async deleteProviderKey(userId: string, provider: Provider) {
+  async deleteProviderKey(userId: string, provider: string) {
     await this.db.run("DELETE FROM provider_keys WHERE user_id = ? AND provider = ?", [userId, provider]);
   }
 
@@ -287,6 +354,9 @@ export class Store {
     );
   }
   async purgeUsage(beforeMonth: string) {
-    await this.db.run("DELETE FROM usage WHERE month < ?", [beforeMonth]);
+    await this.db.batch([
+      { sql: "DELETE FROM usage WHERE month < ?", params: [beforeMonth] },
+      { sql: "DELETE FROM llm_usage WHERE month < ?", params: [beforeMonth] },
+    ]);
   }
 }

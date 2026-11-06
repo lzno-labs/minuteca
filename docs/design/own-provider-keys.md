@@ -51,7 +51,7 @@ Usage is shown to each person (own and hosted minutes this month, hosted minutes
 - **Data:** only ciphertext and last 4 characters at rest; plain keys exist in memory during the check and the call.
 - **Security:** keys are used only for their owner's meetings; server error answers never echo provider bodies (they could reflect the key). Rate limits on saving keys stop key-testing abuse.
 - **Money:** hosted spend is capped in code (20 h a month on Lzno), plus the provider's own prepaid credit as the hard stop. The per person ledger shows who used what.
-- **AI:** permission per provider, stored and enforced on the server, revocable in Settings; the destination is shown before every transcription.
+- **AI:** permission per provider, stored and enforced on the server, revocable in Settings; the destination is shown before every transcription started from the web. Recordings uploaded by the iPhone recorder are transcribed on upload only with a permission already given, and the permission dialog says so.
 
 ## Testing and rollout
 

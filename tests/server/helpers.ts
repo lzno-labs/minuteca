@@ -12,6 +12,26 @@ import { migrate, openSqlite } from "../../src/server/storage/sqlite.ts";
 import { Store } from "../../src/server/storage/store.ts";
 import type { HostedKeys } from "../../src/server/transcription.ts";
 import type { JobResult, Provider, Transcriber, Transcript } from "../../src/server/transcriber/transcriber.ts";
+import type { LlmAdapter, LlmProviderId, LlmRequest } from "../../src/server/llm/llm.ts";
+
+/** A language model whose answers the test controls; it records what it was sent. */
+export function fakeLlm(id: LlmProviderId, answer: (req: LlmRequest) => string = () => "# Minuta: Junta\n\n## Acuerdos\n- Mantener el presupuesto.", needsKey = true) {
+  const calls: { req: LlmRequest; apiKey: string; model: string }[] = [];
+  const llm: LlmAdapter & { calls: typeof calls } = {
+    id,
+    defaultModel: `${id}-default`,
+    needsKey,
+    calls,
+    async complete(req, o) {
+      calls.push({ req, apiKey: o.apiKey, model: o.model });
+      return { text: answer(req), model: o.model, inputTokens: 1200, outputTokens: 300 };
+    },
+    async checkKey(k) {
+      return k.startsWith("good");
+    },
+  };
+  return llm;
+}
 
 export const ORIGIN = "http://localhost:8787";
 export const ADMIN = "admin@example.org";
@@ -65,7 +85,7 @@ export function fakeTranscriber(provider: Provider, opts: { result?: () => JobRe
   return t;
 }
 
-export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys | null; transcribers?: Partial<Record<Provider, Transcriber>>; now?: () => number } = {}) {
+export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys | null; transcribers?: Partial<Record<Provider, Transcriber>>; llm?: Partial<Record<LlmProviderId, LlmAdapter>>; now?: () => number } = {}) {
   const db = openSqlite(":memory:");
   const dir = mkdtempSync(join(tmpdir(), "minuteca-test-"));
   const mails: MailMessage[] = [];
@@ -86,7 +106,8 @@ export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys 
     vault: KeyVault.fromEnv(keyB64),
     hosted: over.hosted ?? null,
     transcribers: tr,
-    limits: { login: memoryLimiter(100, 60), token: memoryLimiter(100, 60) },
+    llm: over.llm ?? { anthropic: fakeLlm("anthropic"), gemini: fakeLlm("gemini") },
+    limits: { login: memoryLimiter(100, 60), token: memoryLimiter(100, 60), llm: memoryLimiter(100, 60) },
     config: appConfig(env, ORIGIN),
     now,
     clientIp: () => "127.0.0.1",

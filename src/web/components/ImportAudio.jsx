@@ -61,7 +61,7 @@ export default function ImportAudio({ onFile, disabled, maxBytes = MAX_FILE_BYTE
         if (!disabled) pick(e.dataTransfer.files);
       }}
       className={`rounded-2xl border-2 border-dashed p-5 text-center transition ${
-        dragging ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-white"
+        dragging ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-surface"
       } ${disabled ? "opacity-60" : ""}`}
     >
       <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-between sm:text-left">
@@ -80,7 +80,7 @@ export default function ImportAudio({ onFile, disabled, maxBytes = MAX_FILE_BYTE
           type="button"
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
-          className="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed"
+          className="shrink-0 rounded-lg border border-slate-300 bg-surface px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:cursor-not-allowed"
         >
           {t("importAudio.button")}
         </button>

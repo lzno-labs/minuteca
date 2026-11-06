@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Loader2, LogOut, Menu, Mic, Settings, Users, X } from "lucide-react";
+import { Languages, Loader2, LogOut, Menu as MenuIcon, Mic, Settings, Users, X } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { assembleSessionAudio, db, deleteSession, findUnfinalizedSessions } from "./lib/db";
@@ -22,6 +22,8 @@ import UsersPanel from "./components/UsersPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import InstallButton from "./components/InstallButton";
 import UpdatePrompt from "./components/UpdatePrompt";
+import Menu from "./components/Menu";
+import { useConfirm } from "./components/Confirm";
 import { takeSharedFile } from "./lib/shareTarget";
 import { useI18n } from "./i18n";
 
@@ -47,11 +49,24 @@ export default function App() {
 
 const USERS_VIEW = "users";
 const SETTINGS_VIEW = "settings";
+const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
+
+/** /?m=<meeting id> opens that meeting (links from the iPhone recorder). */
+function meetingFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get("m");
+  if (!id) return null;
+  params.delete("m");
+  const rest = params.toString();
+  window.history.replaceState(null, "", rest ? `/?${rest}` : "/");
+  return ID_RE.test(id) ? id : null;
+}
 
 function Workspace({ me, onMeChange, onSignOut }) {
   const { t } = useI18n();
   const recorder = useAudioRecorder();
-  const [selectedId, setSelectedId] = useState(null); // null = recorder view
+  const confirm = useConfirm();
+  const [selectedId, setSelectedId] = useState(meetingFromUrl); // null = recorder view
   const [job, setJob] = useState(null);
   const [settings, setSettings] = useState(loadSettings);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -174,8 +189,8 @@ function Workspace({ me, onMeChange, onSignOut }) {
     refreshMeetings();
   };
 
-  const handleSignOut = () => {
-    if (recorder.isActive && !confirm(t("app.signOutConfirm"))) return;
+  const handleSignOut = async () => {
+    if (recorder.isActive && !(await confirm({ title: t("app.signOut"), body: t("app.signOutConfirm"), confirmLabel: t("app.signOut") }))) return;
     recorder.stop().finally(onSignOut);
   };
 
@@ -195,7 +210,7 @@ function Workspace({ me, onMeChange, onSignOut }) {
     <button
       type="button"
       onClick={() => select(view)}
-      className={`rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 ${selectedId === view ? "bg-indigo-50 text-indigo-700" : "text-slate-500"}`}
+      className={`hidden rounded-lg p-2 hover:bg-slate-100 hover:text-slate-800 sm:inline-flex ${selectedId === view ? "bg-indigo-50 text-indigo-700" : "text-slate-500"}`}
       aria-label={label}
       title={label}
     >
@@ -205,38 +220,51 @@ function Workspace({ me, onMeChange, onSignOut }) {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
-        <div className="flex items-center gap-3">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200 bg-surface px-3 sm:px-4">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
             aria-label={t("app.openHistory")}
           >
-            <Menu className="h-5 w-5" />
+            <MenuIcon className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-2">
+          <button type="button" onClick={() => select(null)} className="flex items-center gap-2 rounded-lg px-1 py-1" aria-label={t("app.home")}>
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white">
               <Mic className="h-4 w-4" />
             </span>
-            <span className="hidden text-lg font-bold tracking-tight min-[420px]:inline">minuteca</span>
-          </div>
+            <span className="text-lg font-bold tracking-tight text-slate-900">minuteca</span>
+          </button>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-3">
+        <div className="flex items-center gap-1">
           <InstallButton />
-          <LanguageSwitch />
           {iconButton(SETTINGS_VIEW, Settings, t("settings.open"))}
           {me.role === "admin" && iconButton(USERS_VIEW, Users, t("users.open"))}
-          <span className="hidden text-sm text-slate-600 md:inline">{me.email}</span>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-            aria-label={t("app.signOut")}
-            title={t("app.signOut")}
+          <Menu
+            label={t("app.account")}
+            buttonClassName="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold uppercase text-indigo-700 hover:ring-2 hover:ring-indigo-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+            items={[
+              { content: <span className="block truncate font-medium text-slate-900">{me.email}</span> },
+              "divider",
+              { label: t("settings.open"), icon: Settings, onClick: () => select(SETTINGS_VIEW) },
+              { label: t("users.open"), icon: Users, onClick: () => select(USERS_VIEW), hidden: me.role !== "admin" },
+              {
+                content: (
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2.5 text-slate-700">
+                      <Languages className="h-4 w-4" /> {t("app.language")}
+                    </span>
+                    <LanguageSwitch />
+                  </span>
+                ),
+              },
+              "divider",
+              { label: t("app.signOut"), icon: LogOut, onClick: handleSignOut },
+            ]}
           >
-            <LogOut className="h-4 w-4" />
-          </button>
+            {me.email.slice(0, 1)}
+          </Menu>
         </div>
       </header>
 
@@ -245,8 +273,8 @@ function Workspace({ me, onMeChange, onSignOut }) {
 
         {drawerOpen && (
           <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
-            <div className="absolute inset-0 bg-slate-900/40" onClick={() => setDrawerOpen(false)} />
-            <aside className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-50 shadow-xl">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
+            <aside className="pb-safe absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-slate-50 shadow-xl">
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
@@ -265,7 +293,7 @@ function Workspace({ me, onMeChange, onSignOut }) {
             {selectedId === USERS_VIEW ? (
               <UsersPanel currentEmail={me.email} onBack={() => select(null)} />
             ) : selectedId === SETTINGS_VIEW ? (
-              <SettingsPanel me={me} onMeChange={onMeChange} onBack={() => select(null)} />
+              <SettingsPanel me={me} onMeChange={onMeChange} onBack={() => select(null)} onSignOut={handleSignOut} />
             ) : selectedId === null ? (
               <>
                 <TranscriptionStatus job={job} onRetry={() => runUpload(job.source)} onDismiss={() => setJob(null)} />
@@ -283,6 +311,8 @@ function Workspace({ me, onMeChange, onSignOut }) {
                   onSettingsChange={updateSettings}
                   disabled={Boolean(job && !job.error)}
                   destination={destination}
+                  needsKey={!provider}
+                  onOpenSettings={() => select(SETTINGS_VIEW)}
                   iosNotice={isIosBrowser() ? t("recorder.iosNotice") : null}
                 />
                 <ImportAudio onFile={handleImport} maxBytes={me.maxAudioBytes} disabled={recorder.isActive || Boolean(job && !job.error)} />

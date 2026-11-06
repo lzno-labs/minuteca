@@ -21,7 +21,7 @@ export default function UpdatePrompt({ busy }) {
   return (
     <div
       role="status"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl"
+      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl bg-ink px-4 py-3 text-sm text-on-ink shadow-xl"
     >
       <RefreshCw className="h-4 w-4 shrink-0" />
       <span className="flex-1">{busy ? t("pwa.updateAfterRecording") : t("pwa.updateAvailable")}</span>
@@ -29,11 +29,11 @@ export default function UpdatePrompt({ busy }) {
         type="button"
         disabled={busy}
         onClick={() => updateServiceWorker(true)}
-        className="rounded-lg bg-white px-3 py-1.5 font-semibold text-slate-900 hover:bg-slate-100 disabled:opacity-50"
+        className="rounded-lg bg-surface px-3 py-1.5 font-semibold text-slate-900 hover:bg-slate-100 disabled:opacity-50"
       >
         {t("pwa.update")}
       </button>
-      <button type="button" onClick={() => setNeedRefresh(false)} className="px-1 text-slate-300 hover:text-white">
+      <button type="button" onClick={() => setNeedRefresh(false)} className="px-1 text-on-ink/70 hover:text-on-ink">
         {t("pwa.later")}
       </button>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowLeft, Loader2, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { api } from "../lib/api";
+import { useConfirm } from "./Confirm";
 
 const listUsers = () => api("/users").then((d) => d.users);
 const saveUser = (email, role) => api("/users", { method: "POST", body: { email, role } }).then((d) => d.users);
@@ -12,6 +13,7 @@ const ROLES = ["member", "admin"];
 /** Admin-only screen to manage who can sign in and transcribe. */
 export default function UsersPanel({ currentEmail, onBack }) {
   const { t, locale } = useI18n();
+  const confirm = useConfirm();
   const [users, setUsers] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(null); // email being changed, or "add"
@@ -45,7 +47,7 @@ export default function UsersPanel({ currentEmail, onBack }) {
   };
 
   const input =
-    "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200";
+    "rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200";
 
   return (
     <div className="space-y-5">
@@ -64,7 +66,7 @@ export default function UsersPanel({ currentEmail, onBack }) {
         <p className="mt-1 text-sm text-slate-600">{t("users.subtitle")}</p>
       </header>
 
-      <form onSubmit={add} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <form onSubmit={add} className="rounded-2xl border border-slate-200 bg-surface p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="flex flex-1 flex-col gap-1 text-sm font-medium text-slate-700">
             {t("users.email")}
@@ -106,7 +108,7 @@ export default function UsersPanel({ currentEmail, onBack }) {
         </p>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-2xl border border-slate-200 bg-surface shadow-sm">
         {users === null ? (
           <p className="flex items-center justify-center gap-2 p-6 text-sm text-slate-500">
             {error ? null : (
@@ -142,7 +144,7 @@ export default function UsersPanel({ currentEmail, onBack }) {
                       disabled={self || u.fixed || busy === u.email}
                       onChange={(e) => run(u.email, () => saveUser(u.email, e.target.value))}
                       aria-label={t("users.role")}
-                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                      className="rounded-md border border-slate-300 bg-surface px-2 py-1 text-sm disabled:opacity-60"
                     >
                       {ROLES.map((r) => (
                         <option key={r} value={r}>
@@ -153,8 +155,10 @@ export default function UsersPanel({ currentEmail, onBack }) {
                     <button
                       type="button"
                       disabled={self || u.fixed || busy === u.email}
-                      onClick={() => {
-                        if (confirm(t("users.removeConfirm", { email: u.email }))) run(u.email, () => removeUser(u.email));
+                      onClick={async () => {
+                        if (await confirm({ title: t("users.remove", { email: u.email }), body: t("users.removeConfirm", { email: u.email }), confirmLabel: t("users.removeShort"), danger: true })) {
+                          run(u.email, () => removeUser(u.email));
+                        }
                       }}
                       className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:invisible"
                       aria-label={t("users.remove", { email: u.email })}

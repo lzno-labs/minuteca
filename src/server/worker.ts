@@ -10,6 +10,7 @@ import { cloudflareLimiter, memoryLimiter, type CloudflareRateLimit } from "./li
 import { d1Db, type D1Like } from "./storage/d1.ts";
 import { Store } from "./storage/store.ts";
 import { transcribers } from "./transcriber/index.ts";
+import { llmAdapters } from "./llm/index.ts";
 
 type Bindings = {
   DB: D1Like;
@@ -31,9 +32,11 @@ function setup(env: WorkerEnv, origin: string) {
     vault: KeyVault.fromEnv(env.MINUTECA_KEY_ENCRYPTION_KEY as string | undefined),
     hosted: hostedKeys(env),
     transcribers: transcribers(),
+    llm: llmAdapters(env),
     limits: {
       login: env.LOGIN_LIMITER ? cloudflareLimiter(env.LOGIN_LIMITER) : memoryLimiter(5, 60),
       token: env.TOKEN_LIMITER ? cloudflareLimiter(env.TOKEN_LIMITER) : memoryLimiter(20, 60),
+      llm: env.TOKEN_LIMITER ? cloudflareLimiter(env.TOKEN_LIMITER) : memoryLimiter(10, 60),
     },
     // Workers Free allows 10 ms of CPU per request: provider answers are converted in the browser.
     config: appConfig(env, origin, "client"),

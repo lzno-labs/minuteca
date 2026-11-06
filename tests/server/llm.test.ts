@@ -40,6 +40,7 @@ describe("chat completions adapters", () => {
       seen.push({ url, init });
       return new Response(JSON.stringify({ model: "gpt-x", choices: [{ message: { content: " Minuta " }, finish_reason: "stop" }], usage: { prompt_tokens: 7, completion_tokens: 3 } }));
     }) as typeof fetch;
+    expect(openaiChat(fetcher).defaultModel).toBe("gpt-6.1-sol");
     const r = await openaiChat(fetcher).complete({ ...req, json: true }, { apiKey: "sk", model: "gpt-x" });
     expect(r).toEqual({ text: "Minuta", model: "gpt-x", inputTokens: 7, outputTokens: 3 });
     expect(seen[0]!.url).toBe("https://api.openai.com/v1/chat/completions");
@@ -72,9 +73,10 @@ describe("Gemini adapter", () => {
       seen = { url, init };
       return new Response(JSON.stringify({ modelVersion: "gemini-x", candidates: [{ content: { parts: [{ text: "A" }, { text: "B" }] } }], usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2 } }));
     }) as typeof fetch;
-    const r = await gemini(fetcher).complete({ ...req, json: true }, { apiKey: "g", model: "gemini-flash-latest" });
+    expect(gemini(fetcher).defaultModel).toBe("gemini-3.8-flash");
+    const r = await gemini(fetcher).complete({ ...req, json: true }, { apiKey: "g", model: "gemini-3.8-flash" });
     expect(r).toEqual({ text: "AB", model: "gemini-x", inputTokens: 4, outputTokens: 2 });
-    expect(seen!.url).toContain("/models/gemini-flash-latest:generateContent");
+    expect(seen!.url).toContain("/models/gemini-3.8-flash:generateContent");
     expect(seen!.url).not.toContain("key=");
     expect((seen!.init.headers as Record<string, string>)["x-goog-api-key"]).toBe("g");
     const body = JSON.parse(String(seen!.init.body));

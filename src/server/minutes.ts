@@ -155,7 +155,8 @@ export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: 
         speakers: [...speakers].sort((a, b) => a - b).map(label).join(", "),
         transcript: transcriptLines(tr, label),
       }),
-      maxTokens: 4000,
+      // Reasoning models count their thinking in this limit, so it is generous.
+      maxTokens: 8000,
       json: true,
       effort: "low",
     },
@@ -184,7 +185,7 @@ export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: 
         instructions: instructions ? t(lang, "prompts.minutes.instructions", { instructions }) : "",
         transcript: transcriptLines(tr, label),
       }),
-      maxTokens: 12000,
+      maxTokens: 16000,
       effort: "medium",
     },
   });

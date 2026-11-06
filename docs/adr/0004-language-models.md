@@ -20,7 +20,7 @@ The owner asked for minutes written inside the app: first identify who each voic
 
 Option 3.
 
-- `src/server/llm/`: one adapter per provider with `complete` and `checkKey`. Claude uses `@anthropic-ai/sdk` (pinned), streaming with `finalMessage()`, `output_config.effort` (low for names, medium for minutes) and `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) so a safety decline is retried on Anthropic's recommended model; a final `refusal` becomes an error the app explains. Default models: `claude-opus-5-5`, `gemini-flash-latest`, `gpt-5.4-mini`, `openrouter/auto`; each person can type another model id.
+- `src/server/llm/`: one adapter per provider with `complete` and `checkKey`. Claude uses `@anthropic-ai/sdk` (pinned), streaming with `finalMessage()`, `output_config.effort` (low for names, medium for minutes) and `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) so a safety decline is retried on Anthropic's recommended model; a final `refusal` becomes an error the app explains. Default models, checked against each provider's model page on 2026-11-06: `claude-opus-5-5` (Anthropic's recommended default), `gpt-6.1-sol` (OpenAI's advice "to balance intelligence and cost"; `gpt-6-luna` is its cheaper option), `gemini-3.8-flash` (Google's current stable Flash; not the `gemini-flash-latest` alias, which Google says can point to preview releases) and `openrouter/auto`. Each person can type another model id.
 - Keys use the same vault as transcription keys (AES-256-GCM, last 4 shown). One OpenAI key serves both uses.
 - `runLlm()` in `src/server/minutes.ts` is the only function that calls a language model: it requires a stored permission for that provider (`llm:<provider>`, separate from the audio permission), uses the person's key, and records tokens per person in `llm_usage`. There are no hosted language model keys, so Lzno spends nothing; a hosted offer would be a pro feature with its own cap (a new ADR).
 - The local provider exists only when `MINUTECA_LLM_LOCAL_URL` is set by the administrator. People cannot point the server at an address, which would let them make it fetch any URL.
@@ -34,6 +34,6 @@ Provider data policies shown to people (to check again before relying on them): 
 
 - People pay their provider directly; minuteca shows requests and tokens per month.
 - A person without a key cannot use these features in the hosted version until they add one.
-- Model ids change: defaults are aliases where the provider has one (`gemini-flash-latest`) and can be changed per person; a wrong id returns a clear error.
+- Model ids change: defaults are stable ids checked against the providers' docs and can be changed per person; a retired id returns a clear error ("cámbialo en Ajustes"). Gemini 2.5 Flash, for example, is deprecated and routes to 3.5 Flash-Lite from 2026-12-01.
 - Revisit if the family wants this without their own keys (hosted keys in `pro/`, with a cap in code and an owner decision on cost), or when a provider changes its data policy.
 - Self-hosting: works the same, and `MINUTECA_LLM_LOCAL_URL` lets everything stay on the machine.

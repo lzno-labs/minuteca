@@ -2,8 +2,12 @@
 import { llmCall, llmErrorFor, LlmError, type Fetcher, type LlmAdapter } from "./llm.ts";
 
 const API = "https://generativelanguage.googleapis.com/v1beta";
-/** Google's alias for its current Flash model, so the default does not go stale. */
-export const GEMINI_DEFAULT_MODEL = "gemini-flash-latest";
+/**
+ * Google's current stable Flash model (ai.google.dev/gemini-api/docs/models, read 2026-11-06).
+ * Not the gemini-flash-latest alias: Google says it can point to preview releases and recommends a
+ * specific stable model in production. People can pick another in Settings.
+ */
+export const GEMINI_DEFAULT_MODEL = "gemini-3.8-flash";
 
 export function gemini(fetcher: Fetcher = fetch): LlmAdapter {
   return {

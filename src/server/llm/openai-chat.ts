@@ -53,7 +53,12 @@ export function chatCompletions(o: ChatOptions, fetcher: Fetcher = fetch): LlmAd
   };
 }
 
-export const OPENAI_DEFAULT_MODEL = "gpt-5.4-mini";
+/**
+ * OpenAI's own advice (developers.openai.com/api/docs/models, read 2026-11-06): GPT-6.1 Sol "to
+ * balance intelligence and cost"; GPT-6 Luna for cost-sensitive work; GPT-6 Astra for the most
+ * demanding. All three support Chat Completions. People can pick another in Settings.
+ */
+export const OPENAI_DEFAULT_MODEL = "gpt-6.1-sol";
 export const OPENROUTER_DEFAULT_MODEL = "openrouter/auto";
 
 export const openaiChat = (fetcher?: Fetcher) =>

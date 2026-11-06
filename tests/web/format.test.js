@@ -44,7 +44,7 @@ describe("Copy (LLM-ready text)", () => {
   it("produces the LLM-ready block", () => {
     expect(toAiText(meeting)).toBe(
       "[Meeting: October 24, 2026]\n" +
-        "[Duration: 2m 5s]\n" +
+        "[Duration: 2 min 5 s]\n" +
         "[Participants: Sarah (Director), Dave (Finance)]\n\n" +
         "Sarah (Director): Let's start the review.\n" +
         "Dave (Finance): We are currently 5% under budget.\n",
@@ -53,7 +53,7 @@ describe("Copy (LLM-ready text)", () => {
   it("includes custom titles and falls back to Speaker N", () => {
     const text = toAiText({ ...meeting, title: "Budget review", speakerNames: {} });
     expect(text).toContain("[Title: Budget review]");
-    expect(text).toContain("Speaker 0: Let's start the review.");
+    expect(text).toContain("Speaker 1: Let's start the review.");
   });
 });
 
@@ -69,7 +69,7 @@ describe("speaker handling", () => {
     );
     expect(merged.map((m) => [m.name, m.text])).toEqual([
       ["Ana", "Hi. Again."],
-      ["Speaker 1", "Hello."],
+      ["Speaker 2", "Hello."],
     ]);
   });
   it("computes stats in order of appearance", () => {
@@ -94,7 +94,7 @@ describe("exports", () => {
     const long = "word ".repeat(60).trim();
     const cues = buildCues([{ speaker: 0, start: 0, end: 30, text: long }], {});
     expect(cues.length).toBeGreaterThan(1);
-    for (const c of cues) expect(c.text.length).toBeLessThanOrEqual(84 + "Speaker 0: ".length);
+    for (const c of cues) expect(c.text.length).toBeLessThanOrEqual(84 + "Speaker 1: ".length);
     for (let i = 1; i < cues.length; i++) expect(cues[i].start).toBeGreaterThanOrEqual(cues[i - 1].end);
     expect(cues.at(-1).end).toBeCloseTo(30, 5);
   });
@@ -116,7 +116,7 @@ describe("exports", () => {
       {},
     );
     expect(cues).toEqual([
-      { start: 0, end: 2, text: "Speaker 1: One." },
+      { start: 0, end: 2, text: "Speaker 2: One." },
       { start: 6, end: 10, text: "Two." },
     ]);
   });
@@ -138,9 +138,9 @@ describe("exports in Spanish", () => {
       const text = toAiText({ ...meeting, title: defaultMeetingTitle(new Date(2026, 9, 24, 9, 0)), speakerNames: { 1: "Dave (Finanzas)" } });
       expect(text).toBe(
         "[Reunión: 24 de octubre de 2026]\n" +
-          "[Duración: 2m 5s]\n" +
-          "[Participantes: Hablante 0, Dave (Finanzas)]\n\n" +
-          "Hablante 0: Let's start the review.\n" +
+          "[Duración: 2 min 5 s]\n" +
+          "[Participantes: Persona 1, Dave (Finanzas)]\n\n" +
+          "Persona 1: Let's start the review.\n" +
           "Dave (Finanzas): We are currently 5% under budget.\n",
       );
       expect(toTxt(meeting)).toContain("Fecha: sábado, 24 de octubre de 2026");

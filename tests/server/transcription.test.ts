@@ -238,3 +238,42 @@ describe("conversion in the browser (hosts with little CPU per request)", () => 
     expect((await t.fetch(`/api/meetings/${id}/raw`, { cookie })).status).toBe(404);
   });
 });
+
+describe("recordings from the iPhone", () => {
+  const upload = async (bearer: string, id: string) => {
+    await t.fetch("/api/meetings", { method: "POST", bearer, body: JSON.stringify({ id, title: "Junta", source: "ios", duration: 120 }) });
+    return t.fetch(`/api/meetings/${id}/audio`, { method: "PUT", bearer, body: new Uint8Array(2000).fill(1), headers: { "Content-Type": "audio/mp4", "Content-Length": "2000" } });
+  };
+  const statusOf = async (cookie: string, id: string) => {
+    for (let i = 0; i < 20; i++) {
+      const m = await (await t.fetch(`/api/meetings/${id}`, { cookie })).json();
+      if (m.status !== "uploaded" && m.status !== "transcribing") return m.status;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    return (await (await t.fetch(`/api/meetings/${id}`, { cookie })).json()).status;
+  };
+
+  it("are transcribed on their own once the person allowed their provider", async () => {
+    t = setup();
+    const cookie = await t.signIn();
+    await consent(cookie);
+    await t.fetch("/api/keys/deepgram", { method: "PUT", cookie, body: JSON.stringify({ key: "good-deepgram-key-1234" }) });
+    const bearer = await t.appSignIn();
+    const id = crypto.randomUUID();
+    expect((await upload(bearer, id)).status).toBe(200);
+    expect(await statusOf(cookie, id)).toBe("done");
+    expect(t.tr.deepgram.calls).toHaveLength(1);
+  });
+
+  it("wait for the person when there is no permission yet", async () => {
+    t = setup();
+    const cookie = await t.signIn();
+    await t.fetch("/api/keys/deepgram", { method: "PUT", cookie, body: JSON.stringify({ key: "good-deepgram-key-1234" }) });
+    const bearer = await t.appSignIn();
+    const id = crypto.randomUUID();
+    await upload(bearer, id);
+    await new Promise((r) => setTimeout(r, 30));
+    expect((await (await t.fetch(`/api/meetings/${id}`, { cookie })).json()).status).toBe("uploaded");
+    expect(t.tr.deepgram.calls).toHaveLength(0);
+  });
+});

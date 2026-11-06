@@ -36,7 +36,10 @@
     "recordingBanner": "Grabación en curso: volver al grabador",
     "emptyRecording": "La grabación está vacía.",
     "documentTitle": "minuteca",
-    "uploadingBanner": "Subiendo una grabación: volver"
+    "uploadingBanner": "Subiendo una grabación: volver",
+    "home": "Ir al grabador",
+    "account": "Tu cuenta",
+    "language": "Idioma"
   },
   "recorder": {
     "recording": "Grabando",
@@ -96,7 +99,7 @@
     "restore": "Restaurar y transcribir",
     "downloadRaw": "Descargar el audio original",
     "discard": "Descartar",
-    "discardConfirm": "¿Descartar esta grabación definitivamente? No se puede deshacer."
+    "discardConfirm": "Se borra esta grabación de este dispositivo. No se puede deshacer."
   },
   "status": {
     "failed": "No se pudo subir la grabación",
@@ -129,19 +132,21 @@
     "delete": "Eliminar {title}",
     "audioSaved": "Audio guardado",
     "status": {
-      "created": "esperando audio",
-      "uploaded": "sin transcribir",
-      "transcribing": "transcribiendo",
-      "error": "falló la transcripción",
-      "converting": "lista para abrir"
-    }
+      "created": "Esperando audio",
+      "uploaded": "Sin transcribir",
+      "transcribing": "Transcribiendo",
+      "error": "Falló",
+      "converting": "Lista para abrir"
+    },
+    "pending": "Por transcribir",
+    "meetings": "Reuniones"
   },
   "meeting": {
     "title": "Título de la reunión",
     "defaultTitle": "Reunión - {date}",
     "untitled": "Reunión sin título",
     "delete": "Eliminar reunión",
-    "deleteConfirm": "¿Eliminar “{title}”? No se puede deshacer.",
+    "deleteConfirm": "Se borran «{title}», su transcripción y su audio. No se puede deshacer.",
     "notFound": "Esta reunión ya no existe. Las reuniones se eliminan automáticamente a los 30 días.",
     "expires": "Se elimina el {date}",
     "retention": "Las reuniones, transcripciones y audios se guardan 30 días y luego se eliminan automáticamente. Exporta lo que necesites conservar.",
@@ -150,14 +155,16 @@
     "fromIos": "Grabada en iPhone",
     "transcribedBy": "Transcrita con {provider}",
     "providerHint": "El proveedor que procesó el audio de esta reunión.",
-    "waitingAudio": "Esta reunión todavía no tiene audio. Si la grabaste en el iPhone, abre la grabadora para que termine de subirla."
+    "waitingAudio": "Esta reunión todavía no tiene audio. Si la grabaste en el iPhone, abre la grabadora para que termine de subirla.",
+    "deleteShort": "Eliminar",
+    "more": "Más acciones"
   },
   "speakers": {
     "title": "Hablantes",
     "tip": "Consejo: usa “Nombre (Cargo)”, p. ej. Sara (Directora)",
     "none": "No se detectó voz.",
     "placeholder": "Nombre para {speaker}",
-    "default": "Hablante {n}"
+    "default": "Persona {n}"
   },
   "transcript": {
     "title": "Transcripción",
@@ -174,8 +181,13 @@
     "copied": "¡Copiado!",
     "clipboardFailed": "No se pudo acceder al portapapeles. Usa Descargar .txt en su lugar.",
     "removeAudio": "Quitar audio",
-    "removeAudioConfirm": "¿Eliminar el audio de esta reunión de tu cuenta? La transcripción se conserva.",
-    "audioFailed": "No se pudo descargar el audio: {message}"
+    "removeAudioConfirm": "Se borra el audio de esta reunión. La transcripción se queda.",
+    "audioFailed": "No se pudo descargar el audio: {message}",
+    "export": "Exportar",
+    "txt": "Texto (.txt)",
+    "srt": "Subtítulos (.srt)",
+    "json": "Datos (.json)",
+    "audioFile": "Descargar el audio"
   },
   "exportText": {
     "meeting": "Reunión",
@@ -203,7 +215,8 @@
     "addedBy": "Agregado por {email}",
     "loading": "Cargando usuarios…",
     "empty": "Aún no hay usuarios.",
-    "hint": "La persona entra con un enlace a ese correo. Los cambios se aplican de inmediato."
+    "hint": "La persona entra con un enlace a ese correo. Los cambios se aplican de inmediato.",
+    "removeShort": "Quitar acceso"
   },
   "pwa": {
     "install": "Instalar app",
@@ -217,23 +230,27 @@
   },
   "transcribe": {
     "ready": "Lista para transcribir",
-    "readyWithLength": "Lista para transcribir ({duration})",
     "provider": "Proveedor",
-    "start": "Transcribir",
-    "retry": "Reintentar la transcripción",
     "destination": "El audio saldrá de minuteca hacia {provider} ({where}) para transcribirse.",
-    "paidOwn": "Se usa tu clave: el costo lo cobra {provider} a tu cuenta.",
+    "paidOwn": "Se usa tu clave: {provider} te cobra a ti.",
     "paidHosted": "Se usa la clave del servicio, sin costo para ti, dentro del tope del mes.",
     "noKey": "Para transcribir con {provider} agrega tu clave en Ajustes, o elige otro proveedor.",
     "inProgress": "Transcribiendo con {provider} e identificando a cada persona…",
-    "failed": "La transcripción falló: {reason} El audio sigue guardado; puedes reintentar.",
-    "converting": "Preparando la transcripción…"
+    "failed": "{reason} El audio sigue guardado: puedes intentar de nuevo, con este proveedor u otro.",
+    "converting": "Preparando la transcripción…",
+    "addKey": "Agregar una clave",
+    "canLeave": "Puedes salir de esta página: la transcripción sigue y la verás aquí.",
+    "retryTitle": "La transcripción no terminó",
+    "readyHint": "{duration} de audio, listo para convertirse en texto con el nombre de cada persona.",
+    "readyHintNoLength": "El audio está listo para convertirse en texto con el nombre de cada persona.",
+    "startWith": "Transcribir con {provider}",
+    "options": "{provider} · {language}"
   },
   "consent": {
     "title": "¿Enviar el audio a {provider}?",
     "body": "Para transcribir, minuteca envía el audio de la reunión a {provider} ({where}), un servicio de inteligencia artificial que convierte la voz en texto.",
     "others": "La grabación incluye las voces de otras personas. Envíala solo si tu trabajo y las personas presentes lo permiten.",
-    "revoke": "Este permiso queda guardado para {provider}. Puedes retirarlo cuando quieras en Ajustes.",
+    "revoke": "El permiso queda guardado para {provider}: las grabaciones que subas desde el iPhone se transcribirán solas. Puedes retirarlo en Ajustes cuando quieras.",
     "accept": "Permitir y transcribir"
   },
   "providers": {
@@ -265,22 +282,18 @@
   "settings": {
     "open": "Ajustes",
     "title": "Ajustes",
-    "subtitle": "Proveedor de transcripción, tus claves, permisos y tus datos.",
+    "subtitle": "Con qué se transcribe, tus claves, tus permisos y tus datos.",
     "providers": "Proveedores de transcripción",
     "providersHint": "Elige con cuál transcribir. Puedes usar tu propia clave de cualquiera de ellos, gratis en minuteca: el proveedor te cobra a ti.",
     "keysDisabled": "Este servidor no tiene configurada la clave de cifrado, así que no puede guardar claves propias.",
-    "inUse": "En uso",
-    "use": "Usar este",
     "ownKey": "Tu clave termina en {last4}",
     "removeKey": "Borrar clave",
-    "removeKeyConfirm": "¿Borrar tu clave? Se borra de minuteca; en el proveedor sigue existiendo hasta que la revoques allá.",
+    "removeKeyConfirm": "Se borra de minuteca. En el proveedor sigue activa hasta que la revoques allá.",
     "hostedKey": "Disponible con la clave del servicio",
     "noKey": "Sin clave",
     "pasteKey": "Pega tu clave",
-    "replaceKey": "Pega una clave nueva para cambiarla",
     "saveKey": "Guardar",
     "keyFor": "Clave de {provider}",
-    "consented": "Permitiste enviar audios a {provider}.",
     "revoke": "Retirar permiso",
     "keySafety": "Tu clave se verifica con el proveedor, se guarda cifrada y nunca se vuelve a mostrar: solo sus últimos 4 caracteres. Solo se usa para tus transcripciones.",
     "usage": "Uso de este mes",
@@ -292,7 +305,17 @@
     "dataHint": "Todo se borra solo a los {days} días. Descarga tus reuniones y transcripciones en JSON cuando quieras.",
     "exportAll": "Descargar todos mis datos (JSON)",
     "iosTitle": "Grabadora para iPhone",
-    "iosHint": "En iPhone, graba con la app minuteca (se instala con TestFlight): sigue grabando con la pantalla bloqueada o si entra una llamada, y sube el audio cuando hay señal. Las grabaciones aparecen aquí para transcribirlas."
+    "iosHint": "En iPhone, graba con la app minuteca (se instala con TestFlight): sigue grabando con la pantalla bloqueada o si entra una llamada, y sube el audio cuando hay señal. Las grabaciones aparecen aquí para transcribirlas.",
+    "removeKeyTitle": "¿Borrar tu clave de {provider}?",
+    "revokeTitle": "¿Retirar el permiso para {provider}?",
+    "revokeConfirm": "minuteca no enviará más audio a {provider} hasta que vuelvas a permitirlo. Lo ya transcrito se queda.",
+    "useProvider": "Usar {provider}",
+    "consentedShort": "Permiso dado",
+    "account": "Cuenta",
+    "email": "Correo",
+    "about": "Acerca de Lzno",
+    "changeKey": "Cambiar clave",
+    "addKey": "Agregar mi clave"
   },
   "errors": {
     "generic": "Algo falló (HTTP {status}). Inténtalo de nuevo.",

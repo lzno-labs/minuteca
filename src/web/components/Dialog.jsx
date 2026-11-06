@@ -13,7 +13,7 @@ export default function Dialog({ open, onClose, title, children, actions }) {
     <dialog
       ref={ref}
       onClose={onClose}
-      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-900/40"
+      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-surface p-0 text-slate-900 shadow-xl backdrop:bg-black/50"
     >
       {open && (
         <div className="space-y-4 p-6">

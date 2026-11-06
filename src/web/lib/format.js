@@ -1,8 +1,9 @@
 /** Formatting helpers for transcripts and exports (unit-tested). */
 import { getLocale, t } from "../i18n";
 
+/** Voices are numbered from 1 for people ("Persona 1"); the transcript keeps 0, 1, 2... */
 export function defaultSpeakerName(speaker) {
-  return t("speakers.default", { n: speaker });
+  return t("speakers.default", { n: speaker + 1 });
 }
 
 export function speakerName(speakerNames, speaker) {
@@ -57,15 +58,16 @@ export function formatClock(seconds, forceHours = false) {
   return h > 0 || forceHours ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-/** 3725.4 → "1h 2m"; 95 → "1m 35s". */
+/** 3725.4 → "1 h 2 min"; 2712 → "45 min"; 95 → "1 min 35 s"; 35 → "35 s". Units are SI symbols, the same in every language. */
 export function formatDuration(seconds) {
   const total = Math.max(0, Math.round(seconds || 0));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  if (h > 0) return m ? `${h} h ${m} min` : `${h} h`;
+  if (m >= 10) return `${m} min`;
+  if (m > 0) return s ? `${m} min ${s} s` : `${m} min`;
+  return `${s} s`;
 }
 
 /** SRT timestamp: 3725.4 → "01:02:05,400". */

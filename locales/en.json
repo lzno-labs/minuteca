@@ -36,7 +36,10 @@
     "recordingBanner": "Recording in progress: back to the recorder",
     "emptyRecording": "The recording is empty.",
     "documentTitle": "minuteca",
-    "uploadingBanner": "Uploading a recording: go back"
+    "uploadingBanner": "Uploading a recording: go back",
+    "home": "Go to the recorder",
+    "account": "Your account",
+    "language": "Language"
   },
   "recorder": {
     "recording": "Recording",
@@ -96,7 +99,7 @@
     "restore": "Restore & Transcribe",
     "downloadRaw": "Download the raw audio",
     "discard": "Discard",
-    "discardConfirm": "Permanently discard this recording? This cannot be undone."
+    "discardConfirm": "This recording is deleted from this device. This cannot be undone."
   },
   "status": {
     "failed": "The recording could not be uploaded",
@@ -129,19 +132,21 @@
     "delete": "Delete {title}",
     "audioSaved": "Audio saved",
     "status": {
-      "created": "waiting for audio",
-      "uploaded": "not transcribed",
-      "transcribing": "transcribing",
-      "error": "transcription failed",
-      "converting": "ready to open"
-    }
+      "created": "Waiting for audio",
+      "uploaded": "Not transcribed",
+      "transcribing": "Transcribing",
+      "error": "Failed",
+      "converting": "Ready to open"
+    },
+    "pending": "To transcribe",
+    "meetings": "Meetings"
   },
   "meeting": {
     "title": "Meeting title",
     "defaultTitle": "Meeting - {date}",
     "untitled": "Untitled meeting",
     "delete": "Delete meeting",
-    "deleteConfirm": "Delete “{title}”? This cannot be undone.",
+    "deleteConfirm": "“{title}”, its transcript and its audio are deleted. This cannot be undone.",
     "notFound": "This meeting no longer exists. Meetings are deleted automatically after 30 days.",
     "expires": "Deleted on {date}",
     "retention": "Meetings, transcripts and audio are kept for 30 days and then deleted automatically. Export what you need to keep.",
@@ -150,7 +155,9 @@
     "fromIos": "Recorded on iPhone",
     "transcribedBy": "Transcribed with {provider}",
     "providerHint": "The provider that processed this meeting's audio.",
-    "waitingAudio": "This meeting has no audio yet. If you recorded it on the iPhone, open the recorder so it finishes uploading."
+    "waitingAudio": "This meeting has no audio yet. If you recorded it on the iPhone, open the recorder so it finishes uploading.",
+    "deleteShort": "Delete",
+    "more": "More actions"
   },
   "speakers": {
     "title": "Speakers",
@@ -174,8 +181,13 @@
     "copied": "Copied!",
     "clipboardFailed": "Could not access the clipboard. Use Download .txt instead.",
     "removeAudio": "Remove audio",
-    "removeAudioConfirm": "Delete this meeting's audio from your account? The transcript is kept.",
-    "audioFailed": "Could not download the audio: {message}"
+    "removeAudioConfirm": "This meeting's audio is deleted. The transcript stays.",
+    "audioFailed": "Could not download the audio: {message}",
+    "export": "Export",
+    "txt": "Text (.txt)",
+    "srt": "Subtitles (.srt)",
+    "json": "Data (.json)",
+    "audioFile": "Download the audio"
   },
   "exportText": {
     "meeting": "Meeting",
@@ -203,7 +215,8 @@
     "addedBy": "Added by {email}",
     "loading": "Loading users…",
     "empty": "No users yet.",
-    "hint": "The person signs in with a link sent to that email. Changes apply right away."
+    "hint": "The person signs in with a link sent to that email. Changes apply right away.",
+    "removeShort": "Remove access"
   },
   "pwa": {
     "install": "Install app",
@@ -217,23 +230,27 @@
   },
   "transcribe": {
     "ready": "Ready to transcribe",
-    "readyWithLength": "Ready to transcribe ({duration})",
     "provider": "Provider",
-    "start": "Transcribe",
-    "retry": "Retry the transcription",
     "destination": "The audio will leave minuteca for {provider} ({where}) to be transcribed.",
-    "paidOwn": "Your key is used: {provider} charges your account.",
+    "paidOwn": "Your key is used: {provider} bills you.",
     "paidHosted": "The service's key is used, at no cost to you, within this month's cap.",
     "noKey": "To transcribe with {provider}, add your key in Settings or pick another provider.",
     "inProgress": "Transcribing with {provider} and telling speakers apart…",
-    "failed": "The transcription failed: {reason} The audio is still saved; you can retry.",
-    "converting": "Preparing the transcript…"
+    "failed": "{reason} The audio is still saved: you can try again, with this provider or another.",
+    "converting": "Preparing the transcript…",
+    "addKey": "Add a key",
+    "canLeave": "You can leave this page: the transcription keeps going and will show up here.",
+    "retryTitle": "The transcription did not finish",
+    "readyHint": "{duration} of audio, ready to become text with each speaker's name.",
+    "readyHintNoLength": "The audio is ready to become text with each speaker's name.",
+    "startWith": "Transcribe with {provider}",
+    "options": "{provider} · {language}"
   },
   "consent": {
     "title": "Send the audio to {provider}?",
     "body": "To transcribe, minuteca sends the meeting audio to {provider} ({where}), an artificial intelligence service that turns speech into text.",
     "others": "The recording includes other people's voices. Send it only if your work and the people present allow it.",
-    "revoke": "This permission is kept for {provider}. You can withdraw it at any time in Settings.",
+    "revoke": "The permission is kept for {provider}: recordings you upload from the iPhone are transcribed on their own. You can withdraw it in Settings at any time.",
     "accept": "Allow and transcribe"
   },
   "providers": {
@@ -265,22 +282,18 @@
   "settings": {
     "open": "Settings",
     "title": "Settings",
-    "subtitle": "Transcription provider, your keys, permissions and your data.",
+    "subtitle": "What transcribes, your keys, your permissions and your data.",
     "providers": "Transcription providers",
     "providersHint": "Pick which one transcribes. You can use your own key for any of them, free in minuteca: the provider bills you.",
     "keysDisabled": "This server has no encryption key configured, so it cannot store your own keys.",
-    "inUse": "In use",
-    "use": "Use this one",
     "ownKey": "Your key ends in {last4}",
     "removeKey": "Delete key",
-    "removeKeyConfirm": "Delete your key? It is deleted from minuteca; it keeps working at the provider until you revoke it there.",
+    "removeKeyConfirm": "It is deleted from minuteca. It stays active at the provider until you revoke it there.",
     "hostedKey": "Available with the service's key",
     "noKey": "No key",
     "pasteKey": "Paste your key",
-    "replaceKey": "Paste a new key to replace it",
     "saveKey": "Save",
     "keyFor": "{provider} key",
-    "consented": "You allowed sending audio to {provider}.",
     "revoke": "Withdraw permission",
     "keySafety": "Your key is checked with the provider, stored encrypted and never shown again: only its last 4 characters. It is only used for your transcriptions.",
     "usage": "Usage this month",
@@ -292,7 +305,17 @@
     "dataHint": "Everything is deleted automatically after {days} days. Download your meetings and transcripts as JSON at any time.",
     "exportAll": "Download all my data (JSON)",
     "iosTitle": "iPhone recorder",
-    "iosHint": "On iPhone, record with the minuteca app (installed with TestFlight): it keeps recording with the screen locked or during a call, and uploads when there is signal. Recordings show up here to transcribe."
+    "iosHint": "On iPhone, record with the minuteca app (installed with TestFlight): it keeps recording with the screen locked or during a call, and uploads when there is signal. Recordings show up here to transcribe.",
+    "removeKeyTitle": "Delete your {provider} key?",
+    "revokeTitle": "Withdraw permission for {provider}?",
+    "revokeConfirm": "minuteca will not send more audio to {provider} until you allow it again. What is already transcribed stays.",
+    "useProvider": "Use {provider}",
+    "consentedShort": "Allowed",
+    "account": "Account",
+    "email": "Email",
+    "about": "About Lzno",
+    "changeKey": "Change key",
+    "addKey": "Add my key"
   },
   "errors": {
     "generic": "Something failed (HTTP {status}). Try again.",

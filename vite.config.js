@@ -22,7 +22,7 @@ export default defineConfig({
       registerType: "prompt",
       injectRegister: false,
       injectManifest: {
-        globPatterns: ["**/*.{js,css,html,svg}", "apple-touch-icon.png"],
+        globPatterns: ["**/*.{js,css,html,svg,woff2}", "apple-touch-icon.png"],
       },
       manifest: {
         id: "/",

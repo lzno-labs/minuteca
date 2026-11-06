@@ -30,6 +30,10 @@ The iPhone keeps recording with the screen locked, while another app is in front
 2. `ready` to `created`: `POST /api/meetings` with the recording's own id (idempotent).
 3. `created` to `uploaded`: `PUT /api/meetings/:id/audio` from the file with a background `URLSession`, which iOS completes even if the app is suspended or closed; iOS relaunches the app to report the result. A 409 means the server already has it.
 
+4. Once the server has the audio, it starts the transcription on its own with the person's chosen provider, but only if that person already gave permission for that provider (the permission dialog says that iPhone recordings are then transcribed automatically). Without permission or without a key, the meeting waits in the web app under "Por transcribir". The upload never waits for the transcription.
+
+Uploaded rows open the meeting in the web app (`/?m=<id>`), where it is transcribed, named and shared.
+
 Retries run when the network comes back (`NWPathMonitor`), when the app comes to the front, on pull to refresh and with "Subir ahora". The list shows each recording's state and the last problem (no signal, signed out, too large). Local audio is deleted 7 days after it is uploaded; list entries after 31 days.
 
 ## Alternatives considered

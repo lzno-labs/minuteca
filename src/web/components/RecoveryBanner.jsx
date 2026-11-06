@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LifeBuoy, Download, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { formatDuration } from "../lib/format";
 import { useI18n } from "../i18n";
+import { useConfirm } from "./Confirm";
 
 /**
  * Lists recordings that were never finalized (tab crash, reload, or failed
@@ -9,6 +10,7 @@ import { useI18n } from "../i18n";
  */
 export default function RecoveryBanner({ sessions, onRestore, onDownload, onDiscard, busy }) {
   const { t, locale } = useI18n();
+  const confirm = useConfirm();
   const [working, setWorking] = useState(null);
   if (!sessions?.length) return null;
 
@@ -33,7 +35,7 @@ export default function RecoveryBanner({ sessions, onRestore, onDownload, onDisc
         {sessions.map((s) => (
           <li
             key={s.id}
-            className="flex flex-col gap-3 rounded-xl bg-white/80 p-3 ring-1 ring-amber-200 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 rounded-xl bg-surface/80 p-3 ring-1 ring-amber-200 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="text-sm">
               <div className="font-medium text-slate-900">
@@ -57,7 +59,7 @@ export default function RecoveryBanner({ sessions, onRestore, onDownload, onDisc
               <button
                 type="button"
                 onClick={() => onDownload(s.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-surface px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                 title={t("recovery.downloadRaw")}
               >
                 <Download className="h-4 w-4" /> {t("common.audio")}
@@ -65,8 +67,8 @@ export default function RecoveryBanner({ sessions, onRestore, onDownload, onDisc
               <button
                 type="button"
                 disabled={busy || working === s.id}
-                onClick={() => {
-                  if (confirm(t("recovery.discardConfirm"))) onDiscard(s.id);
+                onClick={async () => {
+                  if (await confirm({ title: t("recovery.discard"), body: t("recovery.discardConfirm"), confirmLabel: t("recovery.discard"), danger: true })) onDiscard(s.id);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-50"
               >

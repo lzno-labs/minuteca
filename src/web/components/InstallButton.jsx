@@ -63,7 +63,7 @@ export default function InstallButton() {
       {showHint && (
         <div
           role="dialog"
-          className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-xl"
+          className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-surface p-4 text-sm text-slate-700 shadow-xl"
         >
           <button
             type="button"

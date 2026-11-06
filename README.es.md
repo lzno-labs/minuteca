@@ -9,6 +9,7 @@ Graba reuniones presenciales y obtén la transcripción con el nombre de cada pe
 - **Transcribe** separando a cada persona, con **Deepgram, AssemblyAI u OpenAI** usando **tu propia clave** (se guarda cifrada y nunca se vuelve a mostrar). Las transcripciones usan un formato abierto propio, igual para todos los proveedores.
 - **Ponle nombre a cada voz**, corrige a quién pertenece un bloque, busca y reproduce el audio desde cualquier línea.
 - **Exporta** en TXT, SRT y JSON, descarga el audio o **compártelo con una app de IA** (ChatGPT, Gemini...) para que redacte la minuta. minuteca siempre dice hacia dónde sale el audio o el texto antes de que salga.
+- **Modo claro y oscuro**, en teléfono y computadora. Lo que grabes con la grabadora de iPhone se transcribe solo una vez que permitiste a tu proveedor.
 - **Entra** con un enlace a tu correo, solo si estás en la lista de acceso. Todo se borra a los **30 días**.
 
 Usa IA: la transcripción la hace el proveedor que elijas, solo después de que lo permitas. Sin rastreo.

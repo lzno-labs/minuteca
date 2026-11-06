@@ -9,6 +9,7 @@ Record in-person meetings and get a transcript with each speaker's name, ready f
 - **Transcribe** with speakers told apart, using **Deepgram, AssemblyAI or OpenAI** with **your own key** (stored encrypted, never shown again). Transcripts use minuteca's own open format, the same for every provider.
 - **Name the voices**, fix which voice a block belongs to, search, play the audio from any line.
 - **Export** TXT, SRT and JSON and the audio, or **share with an AI app** (ChatGPT, Gemini...) to write the minutes. minuteca always says where the audio or text is going before it leaves.
+- **Light and dark**, on phones and computers. Recordings from the iPhone recorder are transcribed on their own once you have allowed your provider.
 - **Sign in** with an email link, only people on an access list. Everything is deleted after **30 days**.
 
 Uses AI: transcription is done by the provider you choose, only after you allow it. Nothing is tracked.

@@ -415,6 +415,16 @@ export function createApp(deps: Deps) {
     }
     const duration = Number(c.req.header("X-Audio-Duration"));
     await store.setAudio(m.user_id, m.id, key, type, size, Number.isFinite(duration) && duration > 0 ? Math.min(duration, 86_400) : null);
+    // The iPhone recorder only uploads: its recordings are transcribed right away when the person
+    // already allowed their provider (the permission dialog says so). Without it, they wait.
+    if (m.source === "ios" && (m.status === "created" || m.status === "uploaded")) {
+      const job = autoTranscribe(tdeps, m.user_id, m.id);
+      try {
+        c.executionCtx.waitUntil(job);
+      } catch {
+        // Node has no execution context: the promise simply runs on.
+      }
+    }
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
@@ -584,6 +594,18 @@ export function createApp(deps: Deps) {
   });
 
   return app;
+}
+
+/** Starts a transcription with the person's chosen provider if they allowed it and a key exists. */
+export async function autoTranscribe(tdeps: TranscriptionDeps, userId: string, meetingId: string): Promise<void> {
+  const user = await tdeps.store.userById(userId);
+  if (!user || user.role === "removed" || !user.consents.includes(user.provider)) return;
+  try {
+    await startTranscription(tdeps, user, meetingId, { provider: user.provider });
+  } catch (e) {
+    // No key, cap reached, already running: the meeting stays "uploaded" for the web app to explain.
+    if (!(e instanceof TranscriptionError)) console.error("auto transcription", meetingId, (e as Error).message);
+  }
 }
 
 /** Retention (meetings, audio and transcripts after retentionDays), expired sign-in rows and stuck jobs. */

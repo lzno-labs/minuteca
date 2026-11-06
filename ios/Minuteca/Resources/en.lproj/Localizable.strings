@@ -49,12 +49,13 @@
 
 "list.title" = "Recordings";
 "list.empty" = "No recordings yet.";
+"list.emptyHint" = "What you record shows up here and uploads to minuteca on its own.";
 "list.recovered" = "Recovered after the app was closed.";
 
 "state.recording" = "Recording";
 "state.waiting" = "Waiting to upload";
 "state.uploading" = "Uploading";
-"state.uploaded" = "In minuteca: transcribe it on the web";
+"state.uploaded" = "In minuteca: tap to open it on the web";
 "state.offline" = "No signal: it will upload on its own";
 "state.signedOut" = "Sign in again to upload it";
 "state.tooLarge" = "Too large to upload";

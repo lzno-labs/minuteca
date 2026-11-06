@@ -9,6 +9,7 @@ import ExportToolbar from "./ExportToolbar";
 import SpeakerRenamer from "./SpeakerRenamer";
 import TranscriptViewer from "./TranscriptViewer";
 import TranscribePanel from "./TranscribePanel";
+import MinutesPanel from "./MinutesPanel";
 import Menu from "./Menu";
 import { useConfirm } from "./Confirm";
 
@@ -28,6 +29,7 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
   const timer = useRef(null);
   const audioRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(-1);
+  const [tab, setTab] = useState(null); // "transcript" | "minutes"; null = minutes if they exist
 
   const flush = useCallback(() => {
     clearTimeout(timer.current);
@@ -205,16 +207,50 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
 
       {done && (
         <>
-          <ExportToolbar meeting={meeting} onDownloadAudio={() => getAudioBlob(meetingId)} />
-          <SpeakerRenamer utterances={meeting.utterances} speakerNames={meeting.speakerNames} onChange={(speakerNames) => edit({ speakerNames })} />
-          <TranscriptViewer
-            utterances={meeting.utterances}
-            speakerNames={meeting.speakerNames}
-            onReassign={onReassign}
-            onSeek={meeting.hasAudio ? onSeek : undefined}
-            activeIndex={activeIndex}
-            forceHours={(meeting.duration || 0) >= 3600}
-          />
+          <div role="tablist" aria-label={t("meeting.views")} className="flex gap-1 rounded-xl bg-slate-100 p-1">
+            {[
+              ["transcript", t("transcript.title")],
+              ["minutes", t("minutes.title")],
+            ].map(([id, label]) => {
+              const active = (tab ?? (meeting.minutes ? "minutes" : "transcript")) === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(id)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${active ? "bg-surface text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {(tab ?? (meeting.minutes ? "minutes" : "transcript")) === "minutes" ? (
+            <MinutesPanel meeting={meeting} me={me} onMeChange={onMeChange} onChanged={reload} onOpenSettings={onOpenSettings} />
+          ) : (
+            <>
+              <ExportToolbar meeting={meeting} onDownloadAudio={() => getAudioBlob(meetingId)} />
+              <SpeakerRenamer
+                meetingId={meetingId}
+                me={me}
+                onMeChange={onMeChange}
+                onOpenSettings={onOpenSettings}
+                utterances={meeting.utterances}
+                speakerNames={meeting.speakerNames}
+                onChange={(speakerNames) => edit({ speakerNames })}
+              />
+              <TranscriptViewer
+                utterances={meeting.utterances}
+                speakerNames={meeting.speakerNames}
+                onReassign={onReassign}
+                onSeek={meeting.hasAudio ? onSeek : undefined}
+                activeIndex={activeIndex}
+                forceHours={(meeting.duration || 0) >= 3600}
+              />
+            </>
+          )}
           {player && (
             <div className="pb-safe sticky bottom-0 z-10 -mx-4 border-t border-slate-200 bg-surface/95 px-4 pt-2 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:pb-2 sm:shadow-lg">
               {player}

@@ -17,6 +17,7 @@
     "access": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/cli.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
     "hono": "4.13.13"
   },
   "devDependencies": {

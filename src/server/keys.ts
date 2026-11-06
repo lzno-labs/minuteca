@@ -7,7 +7,12 @@
  * server, are never logged and are never returned: only their last 4 characters are.
  */
 import { fromBase64, toBase64 } from "./crypto.ts";
-import { PROVIDERS, type Provider } from "./transcriber/transcriber.ts";
+/**
+ * Who a saved key belongs to. One OpenAI key serves both transcription and minutes.
+ */
+export const KEY_VENDORS = ["deepgram", "assemblyai", "openai", "anthropic", "gemini", "openrouter"] as const;
+export type KeyVendor = (typeof KEY_VENDORS)[number];
+export const isKeyVendor = (v: unknown): v is KeyVendor => typeof v === "string" && (KEY_VENDORS as readonly string[]).includes(v);
 
 export const KEY_VERSION = 1;
 
@@ -38,13 +43,13 @@ export class KeyVault {
     return new KeyVault(raw);
   }
 
-  async seal(userId: string, provider: Provider, plain: string): Promise<SealedKey> {
+  async seal(userId: string, provider: string, plain: string): Promise<SealedKey> {
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad(userId, provider) }, await this.#key, new TextEncoder().encode(plain));
     return { ciphertext: toBase64(new Uint8Array(ct)), iv: toBase64(iv), last4: plain.slice(-4), version: KEY_VERSION };
   }
 
-  async open(userId: string, provider: Provider, sealed: Pick<SealedKey, "ciphertext" | "iv">): Promise<string> {
+  async open(userId: string, provider: string, sealed: Pick<SealedKey, "ciphertext" | "iv">): Promise<string> {
     const pt = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: fromBase64(sealed.iv) as BufferSource, additionalData: aad(userId, provider) },
       await this.#key,
@@ -54,11 +59,11 @@ export class KeyVault {
   }
 }
 
-function aad(userId: string, provider: Provider): BufferSource {
+function aad(userId: string, provider: string): BufferSource {
   return new TextEncoder().encode(`minuteca:provider-key:v${KEY_VERSION}:${userId}:${provider}`);
 }
 
 /** Shape check only (the provider confirms the key itself before it is saved). */
-export function plausibleKey(provider: string, key: unknown): key is string {
-  return (PROVIDERS as readonly string[]).includes(provider) && typeof key === "string" && /^[\x21-\x7e]{16,300}$/.test(key);
+export function plausibleKey(vendor: string, key: unknown): key is string {
+  return isKeyVendor(vendor) && typeof key === "string" && /^[\x21-\x7e]{16,300}$/.test(key);
 }

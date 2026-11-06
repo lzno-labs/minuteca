@@ -14,6 +14,8 @@ export interface Config {
   adminEmails: string[];
   providerAudio: "url" | "upload";
   convert: "server" | "client";
+  /** Time zone for dates in generated minutes. */
+  timeZone: string;
 }
 
 export const DEFAULT_MAX_AUDIO_MB = 95; // under the 100 MB request limit of Cloudflare's free plan
@@ -32,6 +34,7 @@ export function appConfig(env: EnvVars, fallbackOrigin: string, defaultConvert: 
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean),
     providerAudio,
+    timeZone: env.MINUTECA_TZ || "America/Costa_Rica",
     convert: env.MINUTECA_CONVERT === "client" || env.MINUTECA_CONVERT === "server" ? env.MINUTECA_CONVERT : defaultConvert,
   };
 }

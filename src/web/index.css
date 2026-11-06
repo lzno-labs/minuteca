@@ -57,3 +57,44 @@ body {
     animation-duration: 3s;
   }
 }
+
+/* Minutes written in Markdown (lib/markdown.jsx). */
+.minutes {
+  color: var(--color-slate-800);
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+.minutes h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-slate-900);
+  margin: 0 0 0.75rem;
+}
+.minutes h3 {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-slate-900);
+  margin: 1.25rem 0 0.4rem;
+}
+.minutes h4 {
+  font-weight: 600;
+  margin: 1rem 0 0.3rem;
+}
+.minutes p {
+  margin: 0.5rem 0;
+}
+.minutes ul,
+.minutes ol {
+  margin: 0.4rem 0;
+  padding-left: 1.25rem;
+}
+.minutes li {
+  margin: 0.2rem 0;
+}
+.minutes li::marker {
+  color: var(--color-slate-400);
+}
+.minutes hr {
+  margin: 1rem 0;
+  border-color: var(--color-slate-200);
+}

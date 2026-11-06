@@ -37,8 +37,8 @@ for (const f of web) {
 // Every error code the server can answer has a text.
 for (const f of files("src/server").filter((x) => x.endsWith(".ts"))) {
   const src = readFileSync(f, "utf8");
-  for (const m of src.matchAll(/err\(c, \d+, "([a-z_]+)"\)|TranscriptionError\("([a-z_]+)"|ProviderError\("([a-z_]+)"/g)) {
-    const code = m[1] || m[2] || m[3];
+  for (const m of src.matchAll(/err\(c, \d+, "([a-z_]+)"\)|TranscriptionError\("([a-z_]+)"|ProviderError\("([a-z_]+)"|MinutesError\("([a-z_]+)"|LlmError\("([a-z_]+)"/g)) {
+    const code = m[1] || m[2] || m[3] || m[4] || (m[5] && `llm_${m[5]}`);
     if (!has(`errors.${code}`)) errors.push(`${f}: no text for error code "${code}" (locales errors.${code})`);
   }
 }

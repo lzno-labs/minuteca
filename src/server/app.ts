@@ -5,10 +5,12 @@ import type { Config } from "./config.ts";
 import { challengeMatches, randomToken, sha256Hex, TOKEN_RE } from "./crypto.ts";
 import { audioKey, parseRange, rawKey, type Files } from "./files/files.ts";
 import { pickLanguage, t } from "./i18n.ts";
-import { plausibleKey, type KeyVault } from "./keys.ts";
+import { isKeyVendor, plausibleKey, type KeyVault } from "./keys.ts";
+import { isLlmProvider, LLM_PROVIDERS, LlmError, MODEL_RE, type LlmAdapter, type LlmProviderId } from "./llm/llm.ts";
+import { generateMinutes, MinutesError, modelFor, suggestSpeakers, type MinutesDeps } from "./minutes.ts";
 import type { Limiter } from "./limits.ts";
 import type { Mail } from "./mail/mail.ts";
-import { monthOf, type MeetingRow, type Role, type Store, type User } from "./storage/store.ts";
+import { isConsentId, monthOf, type MeetingRow, type MinutesRow, type Role, type Store, type User } from "./storage/store.ts";
 import {
   completeFromCallback,
   finishTranscript,
@@ -29,7 +31,9 @@ export interface Deps {
   vault: KeyVault | null;
   hosted: HostedKeys | null;
   transcribers: Record<Provider, Transcriber>;
-  limits: { login: Limiter; token: Limiter };
+  /** Language models for names and minutes; "local" only when the administrator set it up. */
+  llm: Partial<Record<LlmProviderId, LlmAdapter>>;
+  limits: { login: Limiter; token: Limiter; llm: Limiter };
   config: Config;
   now: () => number;
   /** Client IP for rate limits, as reported by the platform (never a header the client controls). */
@@ -51,6 +55,14 @@ const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
 const LANGUAGE_RE = /^(multi|[a-z]{2,3}(-[A-Za-z]{2,4})?)$/;
 const AUDIO_TYPE_RE = /^(audio|video)\/[\w.+-]{1,60}$/;
 const SOURCES = new Set(["web", "import", "ios"]);
+const MAX_INSTRUCTIONS = 2000;
+const MAX_MINUTES = 200_000;
+
+export function minutesJson(m: MinutesRow | null) {
+  return m
+    ? { body: m.body, provider: m.provider, model: m.model, edited: Boolean(m.edited), createdAt: new Date(m.created_at).toISOString(), updatedAt: new Date(m.updated_at).toISOString() }
+    : null;
+}
 /** D1 stores values of up to 2 MB; a 6 hour meeting is about 1 MB in our format. */
 const MAX_TRANSCRIPT_BYTES = 1_900_000;
 
@@ -113,6 +125,7 @@ export function createApp(deps: Deps) {
     providerAudio: config.providerAudio,
     convert: config.convert,
   };
+  const mdeps: MinutesDeps = { store, vault: deps.vault, llm: deps.llm, now: deps.now, timeZone: config.timeZone };
 
   const err = (c: C, status: number, code: string) => c.json({ error: code }, status as 400);
   const sameOrigin = (c: C) => {
@@ -269,6 +282,22 @@ export function createApp(deps: Deps) {
         hostedSeconds: await store.usedSeconds(month, "hosted", user.id),
       },
       hosted: hostedOn ? { remainingSeconds: await hostedRemainingSeconds(tdeps), capSeconds: deps.hosted!.monthlyCapSeconds } : null,
+      llm: {
+        provider: user.llmProvider,
+        instructions: user.minutesInstructions,
+        providers: LLM_PROVIDERS.filter((id) => deps.llm[id]).map((id) => {
+          const adapter = deps.llm[id]!;
+          const k = keys.find((x) => x.provider === id);
+          return {
+            id,
+            needsKey: adapter.needsKey,
+            ownKey: k ? { last4: k.last4, addedAt: new Date(k.created_at).toISOString() } : null,
+            model: modelFor(user, adapter),
+            defaultModel: adapter.defaultModel,
+          };
+        }),
+        usage: await store.llmUsageOf(user.id, month),
+      },
       retentionDays: config.retentionDays,
       maxAudioBytes: config.maxAudioBytes,
     });
@@ -284,24 +313,53 @@ export function createApp(deps: Deps) {
   /** Permission to send audio to a provider (AGENTS: nothing leaves towards an AI without it). */
   authed.put("/me/consents", async (c) => {
     const b = await body<{ provider: string; granted: boolean }>(c);
-    if (!isProvider(b.provider)) return err(c, 400, "invalid_provider");
+    if (!isConsentId(b.provider)) return err(c, 400, "invalid_provider");
     const user = c.get("user");
-    const next = b.granted === true ? [...user.consents, b.provider] : user.consents.filter((p) => p !== b.provider);
+    const id = b.provider;
+    const next = b.granted === true ? [...user.consents, id] : user.consents.filter((p) => p !== id);
     await store.setConsents(user.id, next);
     return c.json({ consents: [...new Set(next)] });
+  });
+
+  /** Language model for names and minutes, a model per provider, and the person's instructions. */
+  authed.put("/me/llm", async (c) => {
+    const user = c.get("user");
+    const b = await body<{ provider: string | null; models: Record<string, unknown>; instructions: string }>(c);
+    let provider = user.llmProvider;
+    if (b.provider === null) provider = null;
+    else if (b.provider !== undefined) {
+      if (!isLlmProvider(b.provider) || !deps.llm[b.provider]) return err(c, 400, "invalid_provider");
+      provider = b.provider;
+    }
+    const models = { ...user.llmModels };
+    if (b.models && typeof b.models === "object") {
+      for (const [k, v] of Object.entries(b.models)) {
+        if (!isLlmProvider(k)) return err(c, 400, "invalid_provider");
+        if (v === "" || v === null) delete models[k];
+        else if (typeof v === "string" && MODEL_RE.test(v.trim())) models[k] = v.trim();
+        else return err(c, 400, "invalid_model");
+      }
+    }
+    let instructions = user.minutesInstructions;
+    if (typeof b.instructions === "string") instructions = b.instructions.trim().slice(0, MAX_INSTRUCTIONS);
+    await store.setLlmSettings(user.id, { provider, models, instructions });
+    return c.json({ ok: true });
   });
 
   /* ---------- own provider keys (docs/design/own-provider-keys.md) ---------- */
 
   authed.put("/keys/:provider", async (c) => {
     if (!deps.vault) return err(c, 503, "keys_disabled");
-    const provider = c.req.param("provider");
+    const provider = c.req.param("provider") ?? "";
     const key = (await body<{ key: string }>(c)).key;
-    if (!isProvider(provider) || !plausibleKey(provider, key)) return err(c, 400, "invalid_key");
+    if (!isKeyVendor(provider) || !plausibleKey(provider, key)) return err(c, 400, "invalid_key");
     if (!(await deps.limits.token.allow(`key:${c.get("user").id}`))) return err(c, 429, "too_many");
+    // One key per vendor: OpenAI's serves transcription and minutes alike.
+    const checker = isProvider(provider) ? deps.transcribers[provider] : isLlmProvider(provider) ? deps.llm[provider] : undefined;
+    if (!checker) return err(c, 400, "invalid_provider");
     let ok: boolean;
     try {
-      ok = await deps.transcribers[provider].checkKey(key);
+      ok = await checker.checkKey(key);
     } catch {
       return err(c, 502, "provider_unavailable");
     }
@@ -312,8 +370,8 @@ export function createApp(deps: Deps) {
   });
 
   authed.delete("/keys/:provider", async (c) => {
-    const provider = c.req.param("provider");
-    if (!isProvider(provider)) return err(c, 400, "invalid_provider");
+    const provider = c.req.param("provider") ?? "";
+    if (!isKeyVendor(provider)) return err(c, 400, "invalid_provider");
     await store.deleteProviderKey(c.get("user").id, provider);
     return c.json({ ok: true });
   });
@@ -359,7 +417,7 @@ export function createApp(deps: Deps) {
     }
     // The transcript goes out as stored, without parsing it again (CPU-limited hosts).
     const transcript = m.status === "done" ? await store.transcriptText(m.id) : null;
-    const head = JSON.stringify(meetingJson(m));
+    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(await store.minutes(m.id)) });
     return new Response(`${head.slice(0, -1)},"transcript":${transcript ?? "null"}}`, { headers: { "Content-Type": "application/json; charset=utf-8" } });
   });
 
@@ -498,6 +556,43 @@ export function createApp(deps: Deps) {
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
+  /* ---------- language models: speaker names and minutes (docs/design/minutes-with-llm.md) ---------- */
+
+  const llmRoute = async (c: C, fn: () => Promise<Response>) => {
+    if (!(await deps.limits.llm.allow(`llm:${c.get("user").id}`))) return err(c, 429, "too_many");
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof MinutesError) return err(c, e.status, e.code);
+      if (e instanceof LlmError) return err(c, 502, `llm_${e.code}`);
+      throw e;
+    }
+  };
+
+  authed.post("/meetings/:id/speakers/suggest", (c) =>
+    llmRoute(c, async () => c.json(await suggestSpeakers(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang")))),
+  );
+
+  authed.post("/meetings/:id/minutes", (c) =>
+    llmRoute(c, async () => c.json(minutesJson(await generateMinutes(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang"))))),
+  );
+
+  authed.put("/meetings/:id/minutes", async (c) => {
+    const m = await ownMeeting(c);
+    if (!m) return err(c, 404, "not_found");
+    const text = (await body<{ body: string }>(c)).body;
+    if (typeof text !== "string" || !text.trim() || text.length > MAX_MINUTES) return err(c, 400, "invalid_minutes");
+    if (!(await store.editMinutes(m.id, text, deps.now()))) return err(c, 404, "not_found");
+    return c.json(minutesJson(await store.minutes(m.id)));
+  });
+
+  authed.delete("/meetings/:id/minutes", async (c) => {
+    const m = await ownMeeting(c);
+    if (!m) return err(c, 404, "not_found");
+    await store.deleteMinutes(m.id);
+    return c.json({ ok: true });
+  });
+
   /* ---------- export everything (AGENTS: data leaves in an open format) ---------- */
 
   authed.get("/export", async (c) => {
@@ -506,15 +601,16 @@ export function createApp(deps: Deps) {
     // Transcripts are spliced in as stored text, so the export never parses them (CPU-limited hosts).
     const parts: string[] = [];
     for (const m of meetings) {
-      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null });
+      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(await store.minutes(m.id)) });
       parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"}}`);
     }
     const data = JSON.stringify({
       format: "minuteca-export",
       version: 1,
       exportedAt: new Date(deps.now()).toISOString(),
-      account: { email: user.email, role: user.role, provider: user.provider, consents: user.consents, keys: (await store.providerKeys(user.id)).map((k) => ({ provider: k.provider, last4: k.last4 })) },
+      account: { email: user.email, role: user.role, provider: user.provider, consents: user.consents, languageModel: user.llmProvider, minutesInstructions: user.minutesInstructions, keys: (await store.providerKeys(user.id)).map((k) => ({ provider: k.provider, last4: k.last4 })) },
       usage: await store.usageOf(user.id),
+      languageModelUsage: await store.llmUsageOf(user.id),
       meetings: [],
     });
     return new Response(`${data.slice(0, -3)}[${parts.join(",")}]}`, {

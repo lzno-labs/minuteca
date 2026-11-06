@@ -14,6 +14,7 @@ import { memoryLimiter } from "./limits.ts";
 import { migrate, openSqlite } from "./storage/sqlite.ts";
 import { Store } from "./storage/store.ts";
 import { transcribers } from "./transcriber/index.ts";
+import { llmAdapters } from "./llm/index.ts";
 
 const DIST = fileURLToPath(new URL("../../dist/", import.meta.url));
 const IP_HEADER = "x-minuteca-client-ip";
@@ -99,7 +100,8 @@ async function main() {
     vault,
     hosted: hostedKeys(env),
     transcribers: transcribers(),
-    limits: { login: memoryLimiter(5, 60), token: memoryLimiter(20, 60) },
+    llm: llmAdapters(env),
+    limits: { login: memoryLimiter(5, 60), token: memoryLimiter(20, 60), llm: memoryLimiter(10, 60) },
     config,
     now: Date.now,
     clientIp: (req) => req.headers.get(IP_HEADER) ?? "unknown",

@@ -5,6 +5,7 @@ import { PROVIDER_IDS } from "../lib/providers";
 import { useI18n } from "../i18n";
 import { useConfirm } from "./Confirm";
 import LanguageSwitch from "./LanguageSwitch";
+import LlmSettings from "./LlmSettings";
 
 const card = "rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm";
 const input =
@@ -193,6 +194,8 @@ export default function SettingsPanel({ me, onMeChange, onBack, onSignOut }) {
           })}
         </div>
       </section>
+
+      <LlmSettings me={me} onMeChange={onMeChange} />
 
       <section className={card}>
         <h2 className="font-semibold text-slate-900">{t("settings.usage")}</h2>

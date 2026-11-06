@@ -8,11 +8,12 @@ Record in-person meetings and get a transcript with each speaker's name, ready f
 - **iPhone recorder** (`ios/`): a small native app that keeps recording with the screen locked, during a call or in another app, and uploads when there is signal.
 - **Transcribe** with speakers told apart, using **Deepgram, AssemblyAI or OpenAI** with **your own key** (stored encrypted, never shown again). Transcripts use minuteca's own open format, the same for every provider.
 - **Name the voices**, fix which voice a block belongs to, search, play the audio from any line.
+- **Minutes with AI:** suggest each speaker's name and write the minutes from the transcript with **Claude, Gemini, ChatGPT, OpenRouter** or a **local model**, using your own key. Edit, copy, share or download them. Always labelled as AI-written.
 - **Export** TXT, SRT and JSON and the audio, or **share with an AI app** (ChatGPT, Gemini...) to write the minutes. minuteca always says where the audio or text is going before it leaves.
 - **Light and dark**, on phones and computers. Recordings from the iPhone recorder are transcribed on their own once you have allowed your provider.
 - **Sign in** with an email link, only people on an access list. Everything is deleted after **30 days**.
 
-Uses AI: transcription is done by the provider you choose, only after you allow it. Nothing is tracked.
+Uses AI: transcription and minutes are done by the providers you choose, only after you allow each one. Nothing is tracked.
 
 ## Self-host in a few commands
 
@@ -49,7 +50,7 @@ See [`ios/README.md`](ios/README.md). It is licensed under **MPL-2.0** ([`ios/LI
 
 ## How it is built
 
-- `src/server/`: the API (TypeScript that Node 22 runs without a build step, [Hono](https://hono.dev)). Behind our own interfaces: `storage` (SQLite or D1), `files` (disk or R2), `mail` (console or Resend) and `transcriber` (one adapter per provider). `node.ts` runs it on any machine, `worker.ts` on Cloudflare Workers.
+- `src/server/`: the API (TypeScript that Node 22 runs without a build step, [Hono](https://hono.dev)). Behind our own interfaces: `storage` (SQLite or D1), `files` (disk or R2), `mail` (console or Resend), `transcriber` and `llm` (one adapter per provider). `node.ts` runs it on any machine, `worker.ts` on Cloudflare Workers.
 - `src/web/`: the web app (React and Vite), installable as an app. All visible text lives in `locales/<lang>.json`.
 - `ios/`: the iPhone recorder (SwiftUI).
 - Decisions: [`docs/adr/`](docs/adr/). Designs: [`docs/design/`](docs/design/).

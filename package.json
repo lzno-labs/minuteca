@@ -1,0 +1,41 @@
+{
+  "name": "minuteca",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Record in-person meetings and get a transcript with each speaker's name, ready for your minutes.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/node.ts",
+    "dev": "vite",
+    "test": "TZ=UTC vitest run",
+    "lint": "tsc --noEmit && node scripts/check-i18n.mjs && node scripts/check-ios-strings.mjs",
+    "access": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/cli.ts"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "22.20.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "dexie": "4.4.6",
+    "dexie-react-hooks": "4.4.0",
+    "lucide-react": "1.48.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vite-plugin-pwa": "1.3.0",
+    "vitest": "5.0.1",
+    "workbox-core": "7.4.1",
+    "workbox-precaching": "7.4.1",
+    "workbox-routing": "7.4.1",
+    "workbox-window": "7.4.1"
+  }
+}

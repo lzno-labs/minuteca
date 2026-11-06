@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: MPL-2.0
+// Build settings for anyone building the minuteca recorder. Signing is per person: put your team
+// and bundle id in Config/Signing.xcconfig (not committed in the open repo), for example:
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   MINUTECA_BUNDLE_ID = com.yourname.minuteca
+//   MINUTECA_SERVER_URL = https:/$()/minuteca.yourdomain.org
+MINUTECA_BUNDLE_ID = org.example.minuteca
+CODE_SIGN_STYLE = Automatic
+// Server the app talks to by default (people can change it on the sign-in screen).
+// "/$()/" keeps the "//" from starting a comment in xcconfig files.
+MINUTECA_SERVER_URL = https:/$()/minuteca.lzno.app
+// Info.plist texts shown by iOS (Spanish, the app's language; translations in <lang>.lproj/InfoPlist.strings).
+MINUTECA_MIC_TEXT = minuteca graba el audio de tus reuniones con el micrófono.
+MINUTECA_FACE_ID_TEXT = minuteca usa Face ID para que solo tú veas tus grabaciones.
+#include? "Signing.xcconfig"

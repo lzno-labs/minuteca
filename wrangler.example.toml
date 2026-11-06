@@ -1,0 +1,44 @@
+# Example Cloudflare Workers configuration for self-hosting minuteca on Cloudflare.
+# Copy to wrangler.toml and fill in your own D1 database id, R2 bucket and address. Nothing here
+# is required to run minuteca elsewhere: `npm run build && npm start` runs it on any machine with
+# Node and SQLite.
+name = "minuteca"
+main = "src/server/worker.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+
+# `npm run build` writes the web app to dist/.
+[build]
+command = "npm run build"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "minuteca"
+database_id = "<your-d1-database-id>"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "minuteca-audio"
+
+# Retention, stuck jobs and expired sign-in links.
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+MINUTECA_ORIGIN = "https://minuteca.example.org"
+MINUTECA_ADMIN_EMAILS = "you@example.org"
+MAIL_PROVIDER = "resend"
+MAIL_FROM = "minuteca <acceso@mail.example.org>"
+
+# Secrets, set with `npx wrangler secret put <NAME>`:
+#   MINUTECA_KEY_ENCRYPTION_KEY   openssl rand -base64 32
+#   RESEND_API_KEY
+# LZNO_CORE_SHA (or any build id) can be passed with --var at deploy time; /health shows it.

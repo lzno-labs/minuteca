@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+
+"app.title" = "minuteca";
+"common.done" = "Done";
+
+"signin.title" = "minuteca";
+"signin.tagline" = "Record your meetings even with the screen locked. Transcripts are on the web.";
+"signin.email" = "Your email";
+"signin.send" = "Email me a sign-in link";
+"signin.onlyList" = "Only people on the access list can sign in. No passwords.";
+"signin.sentTitle" = "Check your email";
+"signin.sent %@" = "If %@ is on the access list, a link is on its way. Open it on this iPhone and tap \"Open in the recorder\".";
+"signin.cancel" = "Use another email";
+"signin.server" = "Server";
+"signin.serverPlaceholder" = "minuteca.example.org";
+"signin.serverSave" = "Use this server";
+"signin.serverInvalid" = "Enter a valid https address.";
+"signin.invalidEmail" = "Enter a valid email.";
+"signin.tooMany" = "Too many attempts. Wait a minute.";
+"signin.failed" = "The link could not be sent. Try again.";
+"signin.offline" = "No connection. Try again when you have signal.";
+"signin.badLink" = "That link is not valid.";
+"signin.otherDevice" = "Open the link on the same iPhone where you asked for it, or ask for another.";
+"signin.expired" = "The link was already used or expired. Ask for another.";
+
+"lock.title" = "minuteca is locked";
+"lock.unlock" = "Unlock";
+"lock.reason" = "Open your recordings";
+
+"recorder.ready" = "Ready to record";
+"recorder.recording" = "Recording";
+"recorder.paused" = "Paused";
+"recorder.interrupted" = "Interrupted: it continues on its own after the call";
+"recorder.finishing" = "Saving…";
+"recorder.level" = "Microphone level";
+"recorder.start" = "Start recording";
+"recorder.pause" = "Pause";
+"recorder.resume" = "Keep recording";
+"recorder.stop" = "Stop and upload";
+"recorder.hint" = "Put the iPhone in the middle of the table. You can lock the screen or switch apps: it keeps recording.";
+"recorder.lockHint" = "You can lock the screen. If a call comes in, recording pauses and continues after you hang up.";
+"recorder.micDenied" = "minuteca has no access to the microphone. Turn it on in Settings > minuteca.";
+"recorder.failed" = "Recording failed. The audio saved so far is safe.";
+"recording.defaultTitle %@" = "Meeting - %@";
+
+"uploads.pending %lld" = "%lld recordings not uploaded";
+"uploads.retry" = "Upload now";
+"uploads.pendingHint" = "They upload on their own when there is signal, even if you close the app. Do not delete them from the iPhone until they say \"In minuteca\".";
+
+"list.title" = "Recordings";
+"list.empty" = "No recordings yet.";
+"list.recovered" = "Recovered after the app was closed.";
+
+"state.recording" = "Recording";
+"state.waiting" = "Waiting to upload";
+"state.uploading" = "Uploading";
+"state.uploaded" = "In minuteca: transcribe it on the web";
+"state.offline" = "No signal: it will upload on its own";
+"state.signedOut" = "Sign in again to upload it";
+"state.tooLarge" = "Too large to upload";
+"state.server" = "The server did not answer: it will retry";
+"state.unreadable" = "The audio could not be prepared";
+
+"settings.title" = "Settings";
+"settings.openWeb" = "Open minuteca on the web";
+"settings.webHint" = "On the web you transcribe, name speakers, export and share with an AI app.";
+"settings.faceId" = "Ask for Face ID when opening";
+"settings.account" = "Account";
+"settings.server" = "Server";
+"settings.signOut" = "Sign out";
+"settings.signOutHint" = "Recordings not yet uploaded stay on this iPhone.";
+"settings.signOutConfirm" = "Sign out on this iPhone?";
+"settings.privacy" = "Audio is saved on this iPhone and uploaded only to your minuteca server. Nothing goes to a transcription service until you ask for it on the web.";

@@ -1,0 +1,3 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+"NSMicrophoneUsageDescription" = "minuteca records your meetings with the microphone.";
+"NSFaceIDUsageDescription" = "minuteca uses Face ID so only you can see your recordings.";

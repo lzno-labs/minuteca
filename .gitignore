@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.wrangler/
+data/
+*.sqlite
+*.sqlite-*
+.DS_Store
+ios/build/
+ios/*.xcodeproj/
+ios/MinutecaKit/.build/
+xcuserdata/
+ios/Minuteca/Info.plist
+ios/Minuteca/Minuteca.entitlements
+ios/Config/Signing.xcconfig
+wrangler.toml

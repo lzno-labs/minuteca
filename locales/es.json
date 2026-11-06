@@ -1,0 +1,346 @@
+{
+  "meta": {
+    "label": "Español",
+    "short": "ES",
+    "locale": "es-CR"
+  },
+  "common": {
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "retry": "Reintentar",
+    "audio": "Audio",
+    "interfaceLanguage": "Idioma de la interfaz"
+  },
+  "login": {
+    "tagline": "Graba reuniones presenciales y obtén la transcripción con el nombre de cada persona, lista para tu minuta.",
+    "email": "Tu correo",
+    "sendLink": "Enviarme un enlace para entrar",
+    "onlyList": "Solo pueden entrar las personas de la lista de acceso. No usamos contraseñas.",
+    "sentTitle": "Revisa tu correo",
+    "sent": "Si {email} está en la lista de acceso, te llegó un enlace para entrar. Vence en 30 minutos.",
+    "retention": "Tus reuniones son privadas y se borran solas a los 30 días."
+  },
+  "access": {
+    "webHint": "Toca el botón para entrar en este navegador.",
+    "enter": "Entrar a minuteca",
+    "appHint": "Este enlace es para la grabadora de minuteca en tu iPhone.",
+    "openApp": "Abrir en la grabadora",
+    "appOnlyHere": "Ábrelo en el mismo iPhone donde pediste el enlace.",
+    "askAgain": "Pedir otro enlace"
+  },
+  "app": {
+    "openHistory": "Abrir historial de reuniones",
+    "signOut": "Cerrar sesión",
+    "signOutConfirm": "Hay una grabación en curso. ¿Detenerla y cerrar sesión? El audio queda guardado en este dispositivo.",
+    "placementTip": "Coloca el dispositivo en el centro de la mesa. El audio se guarda en este dispositivo cada 5 segundos, así que un cierre inesperado o una recarga no hará perder la reunión.",
+    "recordingBanner": "Grabación en curso: volver al grabador",
+    "emptyRecording": "La grabación está vacía.",
+    "documentTitle": "minuteca",
+    "uploadingBanner": "Subiendo una grabación: volver"
+  },
+  "recorder": {
+    "recording": "Grabando",
+    "paused": "En pausa",
+    "finishing": "Finalizando…",
+    "ready": "Listo para grabar",
+    "waitingMic": "Esperando el micrófono…",
+    "start": "Iniciar grabación",
+    "pause": "Pausar grabación",
+    "resume": "Reanudar grabación",
+    "pauseShort": "Pausar",
+    "resumeShort": "Reanudar",
+    "stop": "Detener y subir",
+    "stopShort": "Detener y subir",
+    "autosaved": "Guardado local automático cada 5 s · {size}",
+    "audioLanguage": "Idioma del audio",
+    "micLevel": "Nivel del micrófono",
+    "audioSource": "Fuente de audio",
+    "errors": {
+      "unsupported": "Este navegador no permite grabar audio. Usa una versión reciente de Chrome, Edge, Firefox o Safari.",
+      "micDenied": "Se denegó el acceso al micrófono. Permítelo en la configuración del sitio del navegador e inténtalo de nuevo.",
+      "micNotFound": "No se encontró ningún micrófono. Conecta uno e inténtalo de nuevo.",
+      "micFailed": "No se pudo iniciar el micrófono: {message}",
+      "systemAudioNotSupported": "Este navegador no permite grabar audio del sistema. Usa Chrome, Edge o Firefox.",
+      "systemAudioFailed": "No se pudo capturar el audio del sistema: {message}. Asegúrate de permitir audio cuando selecciones tu pantalla.",
+      "diskWarning": "No se pudo guardar el audio en el almacenamiento local (¿disco lleno?). La grabación continúa en memoria: no cierres esta pestaña hasta que se transcriba.",
+      "recorderError": "Error de grabación: {message}. El audio capturado hasta ahora está guardado.",
+      "micDisconnected": "El micrófono se desconectó. La grabación se detuvo; el audio capturado hasta ahora está guardado.",
+      "unknown": "desconocido"
+    },
+    "destinationAuto": "Al detener, el audio se sube a minuteca y se transcribe con {provider}.",
+    "destinationAsk": "Al detener, el audio se sube a minuteca. Antes de transcribirlo con {provider} te pediremos permiso.",
+    "destinationNoKey": "Al detener, el audio se sube a minuteca. Para transcribirlo, agrega tu clave de un proveedor en Ajustes.",
+    "iosNotice": "En iPhone, el navegador corta la grabación si se bloquea la pantalla o cambias de app. Para reuniones, usa la grabadora de minuteca para iPhone."
+  },
+  "audioLanguages": {
+    "auto": "Detectar automáticamente",
+    "en": "Inglés",
+    "es": "Español",
+    "multi": "Mixto inglés/español",
+    "fr": "Francés",
+    "de": "Alemán",
+    "pt": "Portugués",
+    "it": "Italiano"
+  },
+  "audioSources": {
+    "microphoneOnly": "Solo micrófono",
+    "bothAudioSources": "Micrófono + Audio del sistema",
+    "systemAudioOnly": "Solo audio del sistema"
+  },
+  "recovery": {
+    "found_one": "Se encontró una grabación sin terminar",
+    "found_other": "Se encontraron {count} grabaciones sin terminar",
+    "recorded": "{duration} grabados",
+    "notTranscribed": "aún sin transcribir",
+    "interrupted": "interrumpida",
+    "restore": "Restaurar y transcribir",
+    "downloadRaw": "Descargar el audio original",
+    "discard": "Descartar",
+    "discardConfirm": "¿Descartar esta grabación definitivamente? No se puede deshacer."
+  },
+  "status": {
+    "failed": "No se pudo subir la grabación",
+    "safe": "La grabación está a salvo en este dispositivo.",
+    "uploading": "Subiendo audio… {pct}%",
+    "keepOpen": "Mantén esta pestaña abierta hasta que termine de subir.",
+    "usuallyFast": "Normalmente tarda menos de un minuto, incluso en reuniones largas.",
+    "saving": "Guardando…"
+  },
+  "importAudio": {
+    "title": "¿Grabaste con otra app?",
+    "hint": "Arrastra aquí un archivo de audio o video (MP3, M4A, WAV, OGG, MP4…, hasta {size} MB). Por ejemplo, una nota de voz del iPhone desde Archivos.",
+    "button": "Subir archivo",
+    "notAudio": "“{name}” no parece un archivo de audio o video.",
+    "empty": "“{name}” está vacío.",
+    "tooLarge": "“{name}” pesa más de {size} MB.",
+    "onlyFirst": "Solo se subió el primer archivo. Agrega los demás de uno en uno.",
+    "defaultTitle": "Reunión subida"
+  },
+  "history": {
+    "label": "Historial de reuniones",
+    "newRecording": "Nueva grabación",
+    "recordingInProgress": "Grabación en curso",
+    "search": "Buscar reunión o persona",
+    "empty": "Aún no hay reuniones. Se guardan 30 días y aparecen en todos tus dispositivos.",
+    "retentionNote": "Se guardan 30 días · en todos tus dispositivos",
+    "noMatch": "Ninguna reunión coincide con “{query}”.",
+    "saveTitle": "Guardar título",
+    "rename": "Renombrar {title}",
+    "delete": "Eliminar {title}",
+    "audioSaved": "Audio guardado",
+    "status": {
+      "created": "esperando audio",
+      "uploaded": "sin transcribir",
+      "transcribing": "transcribiendo",
+      "error": "falló la transcripción",
+      "converting": "lista para abrir"
+    }
+  },
+  "meeting": {
+    "title": "Título de la reunión",
+    "defaultTitle": "Reunión - {date}",
+    "untitled": "Reunión sin título",
+    "delete": "Eliminar reunión",
+    "deleteConfirm": "¿Eliminar “{title}”? No se puede deshacer.",
+    "notFound": "Esta reunión ya no existe. Las reuniones se eliminan automáticamente a los 30 días.",
+    "expires": "Se elimina el {date}",
+    "retention": "Las reuniones, transcripciones y audios se guardan 30 días y luego se eliminan automáticamente. Exporta lo que necesites conservar.",
+    "expiresSoon_one": "Se elimina mañana",
+    "expiresSoon_other": "Se elimina en {count} días",
+    "fromIos": "Grabada en iPhone",
+    "transcribedBy": "Transcrita con {provider}",
+    "providerHint": "El proveedor que procesó el audio de esta reunión.",
+    "waitingAudio": "Esta reunión todavía no tiene audio. Si la grabaste en el iPhone, abre la grabadora para que termine de subirla."
+  },
+  "speakers": {
+    "title": "Hablantes",
+    "tip": "Consejo: usa “Nombre (Cargo)”, p. ej. Sara (Directora)",
+    "none": "No se detectó voz.",
+    "placeholder": "Nombre para {speaker}",
+    "default": "Hablante {n}"
+  },
+  "transcript": {
+    "title": "Transcripción",
+    "find": "Buscar en el texto",
+    "found": "{count} resultados",
+    "empty": "No se detectó voz en esta grabación.",
+    "playFromHere": "Reproducir desde aquí",
+    "reassign": "Reasignar hablante",
+    "newSpeaker": "+ Nuevo hablante ({name})",
+    "wrongSpeaker": "¿Hablante incorrecto? Haz clic para reasignar este bloque"
+  },
+  "exportBar": {
+    "copyAi": "Copiar",
+    "copied": "¡Copiado!",
+    "clipboardFailed": "No se pudo acceder al portapapeles. Usa Descargar .txt en su lugar.",
+    "removeAudio": "Quitar audio",
+    "removeAudioConfirm": "¿Eliminar el audio de esta reunión de tu cuenta? La transcripción se conserva.",
+    "audioFailed": "No se pudo descargar el audio: {message}"
+  },
+  "exportText": {
+    "meeting": "Reunión",
+    "title": "Título",
+    "date": "Fecha",
+    "duration": "Duración",
+    "participants": "Participantes"
+  },
+  "users": {
+    "title": "Usuarios",
+    "subtitle": "Personas que pueden entrar y transcribir. Los administradores también pueden cambiar esta lista.",
+    "open": "Gestionar usuarios",
+    "back": "Volver",
+    "email": "Correo",
+    "emailPlaceholder": "nombre@correo.com",
+    "role": "Rol",
+    "roles": {
+      "admin": "Administrador",
+      "member": "Miembro"
+    },
+    "add": "Agregar usuario",
+    "you": "tú",
+    "remove": "Quitar a {email}",
+    "removeConfirm": "¿Quitar el acceso a {email}? Ya no podrá entrar. Sus reuniones se borran solas al vencer.",
+    "addedBy": "Agregado por {email}",
+    "loading": "Cargando usuarios…",
+    "empty": "Aún no hay usuarios.",
+    "hint": "La persona entra con un enlace a ese correo. Los cambios se aplican de inmediato."
+  },
+  "pwa": {
+    "install": "Instalar app",
+    "iosStep1": "En Safari, toca Compartir",
+    "iosStep2": "Desliza el menú hacia abajo, o toca “Más” (…) en la última fila, y elige “Agregar a pantalla de inicio”",
+    "iosStep3": "Activa “Abrir como app web” si aparece y toca “Agregar”. Abre Minuteca desde su ícono.",
+    "updateAvailable": "Hay una nueva versión de Minuteca.",
+    "updateAfterRecording": "Hay una nueva versión lista. Actualiza al terminar esta grabación.",
+    "update": "Actualizar",
+    "later": "Después"
+  },
+  "transcribe": {
+    "ready": "Lista para transcribir",
+    "readyWithLength": "Lista para transcribir ({duration})",
+    "provider": "Proveedor",
+    "start": "Transcribir",
+    "retry": "Reintentar la transcripción",
+    "destination": "El audio saldrá de minuteca hacia {provider} ({where}) para transcribirse.",
+    "paidOwn": "Se usa tu clave: el costo lo cobra {provider} a tu cuenta.",
+    "paidHosted": "Se usa la clave del servicio, sin costo para ti, dentro del tope del mes.",
+    "noKey": "Para transcribir con {provider} agrega tu clave en Ajustes, o elige otro proveedor.",
+    "inProgress": "Transcribiendo con {provider} e identificando a cada persona…",
+    "failed": "La transcripción falló: {reason} El audio sigue guardado; puedes reintentar.",
+    "converting": "Preparando la transcripción…"
+  },
+  "consent": {
+    "title": "¿Enviar el audio a {provider}?",
+    "body": "Para transcribir, minuteca envía el audio de la reunión a {provider} ({where}), un servicio de inteligencia artificial que convierte la voz en texto.",
+    "others": "La grabación incluye las voces de otras personas. Envíala solo si tu trabajo y las personas presentes lo permiten.",
+    "revoke": "Este permiso queda guardado para {provider}. Puedes retirarlo cuando quieras en Ajustes.",
+    "accept": "Permitir y transcribir"
+  },
+  "providers": {
+    "deepgram": {
+      "name": "Deepgram",
+      "where": "Estados Unidos",
+      "privacy": "Le pedimos en cada envío no usar tus audios para mejorar sus modelos."
+    },
+    "assemblyai": {
+      "name": "AssemblyAI",
+      "where": "Estados Unidos",
+      "privacy": "Hoy no entrena con audios de clientes, pero sus términos lo permiten: si usas tu clave, desactívalo en su panel (Data Controls). Al terminar, minuteca borra la transcripción de sus servidores."
+    },
+    "openai": {
+      "name": "OpenAI",
+      "where": "Estados Unidos",
+      "privacy": "Según su política, no usa los audios de su API para entrenar. Acepta archivos de hasta 25 MB."
+    }
+  },
+  "share": {
+    "button": "Compartir con una app de IA",
+    "title": "Compartir la transcripción",
+    "warning": "La transcripción saldrá de minuteca hacia la app que elijas (por ejemplo ChatGPT o Gemini), que la tratará con sus propias reglas. Incluye lo que dijo cada persona.",
+    "how": "En el teléfono se abre el menú de compartir con el texto y un archivo .txt. En la computadora se copia el texto con instrucciones: pégalo en la app de IA.",
+    "continue": "Compartir",
+    "copied": "Copiado. Pégalo en ChatGPT, Gemini o la app de IA que uses y te devolverá la minuta.",
+    "prompt": "Con la siguiente transcripción de una reunión, redacta la minuta en español: fecha, asistentes, temas tratados, acuerdos y tareas pendientes con su responsable y fecha. No inventes nada que no esté en la transcripción."
+  },
+  "settings": {
+    "open": "Ajustes",
+    "title": "Ajustes",
+    "subtitle": "Proveedor de transcripción, tus claves, permisos y tus datos.",
+    "providers": "Proveedores de transcripción",
+    "providersHint": "Elige con cuál transcribir. Puedes usar tu propia clave de cualquiera de ellos, gratis en minuteca: el proveedor te cobra a ti.",
+    "keysDisabled": "Este servidor no tiene configurada la clave de cifrado, así que no puede guardar claves propias.",
+    "inUse": "En uso",
+    "use": "Usar este",
+    "ownKey": "Tu clave termina en {last4}",
+    "removeKey": "Borrar clave",
+    "removeKeyConfirm": "¿Borrar tu clave? Se borra de minuteca; en el proveedor sigue existiendo hasta que la revoques allá.",
+    "hostedKey": "Disponible con la clave del servicio",
+    "noKey": "Sin clave",
+    "pasteKey": "Pega tu clave",
+    "replaceKey": "Pega una clave nueva para cambiarla",
+    "saveKey": "Guardar",
+    "keyFor": "Clave de {provider}",
+    "consented": "Permitiste enviar audios a {provider}.",
+    "revoke": "Retirar permiso",
+    "keySafety": "Tu clave se verifica con el proveedor, se guarda cifrada y nunca se vuelve a mostrar: solo sus últimos 4 caracteres. Solo se usa para tus transcripciones.",
+    "usage": "Uso de este mes",
+    "usageOwn": "Con tus claves",
+    "usageHosted": "Con la clave del servicio",
+    "minutes": "{n} min",
+    "hostedLeft": "Quedan {left} de {cap} min este mes para todas las personas.",
+    "data": "Tus datos",
+    "dataHint": "Todo se borra solo a los {days} días. Descarga tus reuniones y transcripciones en JSON cuando quieras.",
+    "exportAll": "Descargar todos mis datos (JSON)",
+    "iosTitle": "Grabadora para iPhone",
+    "iosHint": "En iPhone, graba con la app minuteca (se instala con TestFlight): sigue grabando con la pantalla bloqueada o si entra una llamada, y sube el audio cuando hay señal. Las grabaciones aparecen aquí para transcribirlas."
+  },
+  "errors": {
+    "generic": "Algo falló (HTTP {status}). Inténtalo de nuevo.",
+    "network": "No se pudo conectar con minuteca. Revisa tu conexión.",
+    "cancelled": "Cancelado.",
+    "invalid_email": "Escribe un correo válido.",
+    "bad_origin": "Solicitud bloqueada por seguridad. Recarga la página.",
+    "invalid_challenge": "La grabadora envió una solicitud inválida.",
+    "too_many": "Demasiados intentos. Espera un minuto.",
+    "mail_failed": "No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.",
+    "link_expired": "Este enlace ya se usó o venció.",
+    "not_allowed": "Ese correo no está en la lista de acceso.",
+    "signed_out": "Tu sesión se cerró. Vuelve a entrar.",
+    "invalid_provider": "Proveedor desconocido.",
+    "keys_disabled": "Este servidor no puede guardar claves propias.",
+    "invalid_key": "El proveedor no aceptó esa clave.",
+    "provider_unavailable": "No se pudo contactar al proveedor. Inténtalo de nuevo.",
+    "invalid_id": "Identificador inválido.",
+    "id_taken": "Ese identificador ya existe.",
+    "not_found": "No se encontró.",
+    "invalid_speakers": "No se pudo guardar el cambio de hablante.",
+    "already_transcribed": "Esta reunión ya se transcribió.",
+    "not_audio": "Ese archivo no es de audio o video.",
+    "length_required": "No se pudo leer el tamaño del archivo.",
+    "too_large": "El archivo es demasiado grande.",
+    "empty": "La grabación está vacía.",
+    "upload_incomplete": "La subida no terminó. Tu audio está guardado; inténtalo de nuevo.",
+    "busy": "Ya se está transcribiendo.",
+    "no_audio": "Esta reunión no tiene audio.",
+    "already_done": "Esta reunión ya se transcribió.",
+    "no_consent": "Primero tienes que permitir el envío del audio a ese proveedor.",
+    "no_key": "No hay clave para ese proveedor. Agrega la tuya en Ajustes.",
+    "hosted_cap": "Se acabaron los minutos del servicio de este mes. Usa tu propia clave o espera al mes siguiente.",
+    "not_admin": "Solo los administradores pueden hacer esto.",
+    "self": "No puedes quitarte a ti ni a un administrador fijo.",
+    "server_error": "El servidor tuvo un problema. Inténtalo de nuevo.",
+    "unprocessable": "El proveedor no pudo procesar este audio.",
+    "unavailable": "El proveedor no respondió.",
+    "timeout": "El proveedor tardó demasiado.",
+    "invalid_body": "Solicitud inválida.",
+    "not_converting": "La reunión no está esperando conversión.",
+    "invalid_transcript": "La transcripción recibida no es válida."
+  },
+  "mail": {
+    "signIn": {
+      "subject": "Tu enlace para entrar a minuteca",
+      "body": "Hola:\n\nPara entrar a minuteca, abre este enlace en los próximos {minutes} minutos:\n\n{link}\n\nSi no lo pediste, ignora este correo.\n\nminuteca",
+      "bodyApp": "Hola:\n\nPara entrar a la grabadora de minuteca, abre este enlace en tu iPhone en los próximos {minutes} minutos y toca «Abrir en la grabadora»:\n\n{link}\n\nSi no lo pediste, ignora este correo.\n\nminuteca"
+    }
+  }
+}

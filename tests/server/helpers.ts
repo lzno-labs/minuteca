@@ -90,7 +90,8 @@ export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys 
     config: appConfig(env, ORIGIN),
     now,
     clientIp: () => "127.0.0.1",
-    assets: async () => new Response("<!doctype html><title>minuteca</title>", { headers: { "Content-Type": "text/html" } }),
+    // Like Workers' ASSETS binding: fetch() responses have immutable headers.
+    assets: () => fetch("data:text/html,<!doctype html><title>minuteca</title>"),
   };
   const ready = migrate(db);
   const app = createApp(deps);

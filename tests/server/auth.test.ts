@@ -12,6 +12,16 @@ describe("health", () => {
   });
 });
 
+describe("web app", () => {
+  it("serves the app with security headers, even when the platform's headers are immutable", async () => {
+    t = setup();
+    const r = await t.fetch("/");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-security-policy")).toContain("default-src 'self'");
+    expect(r.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+});
+
 describe("sign in with an email link", () => {
   it("sends a link only to people on the access list, with the same answer for everyone", async () => {
     t = setup();

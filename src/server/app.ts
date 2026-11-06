@@ -572,7 +572,9 @@ export function createApp(deps: Deps) {
 
   app.get("*", async (c) => {
     if (!deps.assets) return c.text("minuteca API. Build the web app with `npm run build`.", 404);
-    return deps.assets(c.req.raw);
+    // Workers' asset responses have immutable headers; a copy lets the security headers be added.
+    const r = await deps.assets(c.req.raw);
+    return new Response(r.body, r);
   });
 
   app.onError((e, c) => {

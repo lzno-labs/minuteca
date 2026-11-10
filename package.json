@@ -14,7 +14,8 @@
     "dev": "vite",
     "test": "TZ=UTC vitest run",
     "lint": "tsc --noEmit && node scripts/check-i18n.mjs && node scripts/check-ios-strings.mjs && node scripts/gen-dark-theme.mjs --check",
-    "access": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/cli.ts"
+    "access": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/cli.ts",
+    "local:transcribe": "node --disable-warning=ExperimentalWarning desktop/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.1.0",

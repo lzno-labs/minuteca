@@ -1,0 +1,14 @@
+{
+  "name": "minuteca-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "minuteca for Mac and Windows: local transcription engine (phase 1, docs/design/desktop-app.md)",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "dependencies": {
+    "sherpa-onnx-node": "2.0.1"
+  }
+}

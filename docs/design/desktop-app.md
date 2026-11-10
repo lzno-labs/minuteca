@@ -15,12 +15,13 @@ On a Mac or Windows computer, the person opens "minuteca", sees the same app as 
 
 ## Approach
 
+- **Install:** `minuteca.lzno.app/descargar` detects Mac or Windows and offers the installer; on Windows it shows, with a picture, the two clicks for the SmartScreen warning.
 - **First run:** choose the server (default `minuteca.lzno.app`), sign in by email (the link opens the app through `minuteca://acceso`), then "Descargar modelos de transcripción (710 MB)" with progress, resumable, checked by SHA-256. Needs about 1.5 GB of disk and 8 GB of RAM.
 - **Transcribe:** in a meeting, "Transcribir" lists "En esta computadora" (only inside the desktop app) next to the cloud providers, with an optional "¿Cuántas personas hablaron?" that improves speaker separation. The app tells the server (`POST /api/meetings/:id/transcribe` with `provider: "local"`, which marks it "transcribing on a computer" without spending anything), downloads the audio with byte ranges, decodes it to 16 kHz mono with Chromium's own decoders (no ffmpeg in the installer), runs speaker separation and then speech recognition per speaker turn in a utility process, and sends the result with `PUT /api/meetings/:id/transcript`. Progress shows in the window and the tray or menu bar; the computer is kept awake while it runs. The web on other devices shows "Transcribiendo en una computadora" with "Cancelar"; a claim older than 24 hours is released by `maintenance()`.
 - **Speed:** measured 0.2 times real time on 4 CPU cores without GPU (2 hours in about 25 minutes). Apple Silicon and newer Windows laptops should be similar or faster; a CoreML or DirectML execution provider is a later improvement, measured before adopting it.
 - **Security:** the window only navigates to the chosen server; other links open in the browser. The preload bridge exposes three calls (`localAvailable`, `transcribeLocally`, `cancel`) and no file system or Node access. The bearer token lives in the main process and is attached to that origin's requests. Model files are checked by hash before loading.
-- **Updates:** Mac checks a signed update feed served by the minuteca server; Windows updates through the Store. The app warns when the server needs a newer app.
-- **Phases:** (1) the engine as a command (`npm run local:transcribe -- reunion.m4a`) and a comparison on 2 or 3 real meetings against Deepgram, on the owner's Mac; (2) the shell, server changes and Mac build; (3) Windows build and Store listing; (4) optional: local language model for minutes.
+- **Updates:** both check an update feed served by the minuteca server and install in the background. Mac updates are signed and notarized; Windows updates are downloaded by the app itself, so SmartScreen does not ask again. The app warns when the server needs a newer app.
+- **Phases:** (1) the engine as a command (`npm run local:transcribe -- reunion.m4a`) and a comparison on 2 or 3 real meetings against Deepgram, on the owner's Mac; (2) the shell, server changes and Mac build; (3) Windows installer; (4) optional: local language model for minutes.
 
 ## Alternatives considered
 
@@ -31,5 +32,6 @@ On a Mac or Windows computer, the person opens "minuteca", sees the same app as 
 ## Risks and safeguards
 
 - Real rooms (echo, distance, people talking over each other) separate speakers worse than the spike: phase 1 measures it on real meetings before building the rest, and the person can always pick a cloud provider or fix voices by hand.
+- The unsigned Windows installer: SmartScreen warns once and some antivirus programs may distrust it. Acceptable for the family; signing is revisited (ADR-0005) before offering it to others.
 - A laptop that sleeps or closes mid-way: the claim expires and the meeting can be transcribed again.
 - Model licenses require attribution: shown in "Acerca de" with links.

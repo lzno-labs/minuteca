@@ -84,6 +84,22 @@ describe("Gemini adapter", () => {
     expect(body.generationConfig.responseMimeType).toBe("application/json");
   });
 
+  it("tells a location block and other refusals apart, logging only status codes", async () => {
+    const answer = (status: number, error: object) => (async () => new Response(JSON.stringify({ error }), { status })) as unknown as typeof fetch;
+    const where = { status: "FAILED_PRECONDITION", message: "User location is not supported for the API use." };
+    await expect(gemini(answer(400, where)).complete(req, { apiKey: "g", model: "m" })).rejects.toMatchObject({ code: "region", message: "gemini 400 FAILED_PRECONDITION" });
+    await expect(gemini(answer(400, where)).checkKey("g")).rejects.toMatchObject({ code: "region" });
+    await expect(gemini(answer(400, { status: "INVALID_ARGUMENT", message: "The input token count exceeds the maximum." })).complete(req, { apiKey: "g", model: "m" }))
+      .rejects.toMatchObject({ code: "too_long" });
+    await expect(gemini(answer(503, { status: "UNAVAILABLE", message: "The model is overloaded." })).complete(req, { apiKey: "g", model: "m" }))
+      .rejects.toMatchObject({ code: "unavailable", message: "gemini 503 UNAVAILABLE" });
+    await expect(gemini(answer(400, { status: "INVALID_ARGUMENT", message: "API key not valid." })).checkKey("g")).resolves.toBe(false);
+    const openaiRegion = answer(403, { code: "unsupported_country_region_territory", message: "Country not supported" });
+    await expect(openaiChat(openaiRegion).complete(req, { apiKey: "k", model: "m" })).rejects.toMatchObject({ code: "region", message: "openai 403 unsupported_country_region_territory" });
+    await expect(openaiChat(openaiRegion).checkKey("k")).rejects.toMatchObject({ code: "region" });
+    await expect(openaiChat(answer(403, { code: "forbidden" })).checkKey("k")).resolves.toBe(false);
+  });
+
   it("knows an invalid key behind Gemini's 400", async () => {
     const fetcher = (async () => new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "API key not valid." } }), { status: 400 })) as unknown as typeof fetch;
     await expect(gemini(fetcher).complete(req, { apiKey: "g", model: "m" })).rejects.toMatchObject({ code: "invalid_key" });

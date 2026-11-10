@@ -2,6 +2,14 @@
 // speaks the same API (Ollama, LM Studio, llama.cpp), set up by whoever runs minuteca.
 import { llmCall, llmErrorFor, LlmError, type Fetcher, type LlmAdapter, type LlmProviderId } from "./llm.ts";
 
+/** OpenAI answers 403 `unsupported_country_region_territory` when the server runs where it does not serve. */
+async function chatError(id: string, r: Response): Promise<LlmError> {
+  const code = ((await r.json().catch(() => ({}))) as { error?: { code?: unknown } }).error?.code;
+  const why = `${id} ${r.status}${typeof code === "string" ? ` ${code}` : ""}`;
+  if (r.status === 403 && code === "unsupported_country_region_territory") return new LlmError("region", why);
+  return new LlmError(llmErrorFor(id, r.status).code, why);
+}
+
 interface ChatOptions {
   id: LlmProviderId;
   baseUrl: string;
@@ -33,7 +41,7 @@ export function chatCompletions(o: ChatOptions, fetcher: Fetcher = fetch): LlmAd
       };
       if (req.json) body.response_format = { type: "json_object" };
       const r = await llmCall(o.id, fetcher, `${o.baseUrl}/chat/completions`, { method: "POST", headers: headers(apiKey), body: JSON.stringify(body) });
-      if (!r.ok) throw llmErrorFor(o.id, r.status);
+      if (!r.ok) throw await chatError(o.id, r);
       const j = (await r.json()) as any;
       const choice = j?.choices?.[0];
       if (choice?.finish_reason === "content_filter") throw new LlmError("refused", `${o.id} filtered the answer`);
@@ -46,9 +54,10 @@ export function chatCompletions(o: ChatOptions, fetcher: Fetcher = fetch): LlmAd
     },
     async checkKey(apiKey) {
       const r = await llmCall(o.id, fetcher, `${o.baseUrl}${o.keyCheckPath}`, { headers: headers(apiKey) }, 15_000);
-      if (r.status === 401 || r.status === 403) return false;
-      if (!r.ok) throw llmErrorFor(o.id, r.status);
-      return true;
+      if (r.ok) return true;
+      const e = await chatError(o.id, r);
+      if (e.code === "invalid_key") return false;
+      throw e;
     },
   };
 }

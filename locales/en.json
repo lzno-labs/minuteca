@@ -378,7 +378,8 @@
     "llm_rate_limited": "The provider is limiting requests or your account has no credit. Try again later.",
     "llm_unavailable": "The provider did not answer properly. Try again.",
     "llm_timeout": "The model took too long. Try again.",
-    "llm_empty_answer": "The model returned no text. Try again."
+    "llm_empty_answer": "The model returned no text. Try again.",
+    "llm_region": "The provider does not accept requests from where the minuteca server runs. Try another provider."
   },
   "mail": {
     "signIn": {

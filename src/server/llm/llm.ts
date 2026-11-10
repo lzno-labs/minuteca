@@ -36,9 +36,13 @@ export interface LlmAdapter {
   checkKey(apiKey: string): Promise<boolean>;
 }
 
-export type LlmErrorCode = "invalid_key" | "model_not_found" | "refused" | "too_long" | "rate_limited" | "unavailable" | "timeout" | "empty_answer";
+/** `region`: the provider refuses requests from where the server runs (Gemini and OpenAI block some countries). */
+export type LlmErrorCode = "invalid_key" | "model_not_found" | "refused" | "too_long" | "rate_limited" | "unavailable" | "timeout" | "empty_answer" | "region";
 
-/** Errors carry a code the app can show; provider error bodies never reach people or logs. */
+/**
+ * Errors carry a code the app can show. The message (logged by the server) holds only the provider, the
+ * HTTP status and the provider's error code: provider error bodies never reach people or logs.
+ */
 export class LlmError extends Error {
   code: LlmErrorCode;
   constructor(code: LlmErrorCode, message: string) {

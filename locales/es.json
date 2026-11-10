@@ -378,7 +378,8 @@
     "llm_rate_limited": "El proveedor está limitando las solicitudes o tu cuenta no tiene saldo. Intenta más tarde.",
     "llm_unavailable": "El proveedor no respondió bien. Intenta de nuevo.",
     "llm_timeout": "El modelo tardó demasiado. Intenta de nuevo.",
-    "llm_empty_answer": "El modelo no devolvió texto. Intenta de nuevo."
+    "llm_empty_answer": "El modelo no devolvió texto. Intenta de nuevo.",
+    "llm_region": "El proveedor no atiende solicitudes desde donde corre el servidor de minuteca. Prueba con otro proveedor."
   },
   "mail": {
     "signIn": {

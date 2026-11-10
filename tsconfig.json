@@ -16,5 +16,6 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["src/server", "tests/server"]
+  "include": ["src/server", "tests/server", "desktop", "tests/desktop"],
+  "exclude": ["desktop/node_modules"]
 }

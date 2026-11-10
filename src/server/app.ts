@@ -360,7 +360,8 @@ export function createApp(deps: Deps) {
     let ok: boolean;
     try {
       ok = await checker.checkKey(key);
-    } catch {
+    } catch (e) {
+      if (e instanceof LlmError && e.code === "region") return err(c, 502, "llm_region");
       return err(c, 502, "provider_unavailable");
     }
     if (!ok) return err(c, 400, "invalid_key");
@@ -564,7 +565,11 @@ export function createApp(deps: Deps) {
       return await fn();
     } catch (e) {
       if (e instanceof MinutesError) return err(c, e.status, e.code);
-      if (e instanceof LlmError) return err(c, 502, `llm_${e.code}`);
+      if (e instanceof LlmError) {
+        // Provider, HTTP status and the provider's error code only (see LlmError).
+        console.error("llm", e.code, e.message);
+        return err(c, 502, `llm_${e.code}`);
+      }
       throw e;
     }
   };

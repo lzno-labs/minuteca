@@ -1,6 +1,7 @@
 // Cloudflare Workers entry (hosted version). Bindings: DB (D1), FILES (R2), ASSETS (dist/),
 // optional LOGIN_LIMITER and TOKEN_LIMITER (rate limiting). Secrets: MINUTECA_KEY_ENCRYPTION_KEY,
-// RESEND_API_KEY, and whatever hosted.ts reads. A cron trigger runs maintenance().
+// RESEND_API_KEY, and whatever hosted.ts reads. maintenance() runs from a cron trigger when the
+// account has one free, and from requests in any case (see fetch below).
 import { createApp, maintenance, type Deps } from "./app.ts";
 import { appConfig, mailFrom, type EnvVars } from "./config.ts";
 import { r2Files, type R2Like } from "./files/r2.ts";
@@ -22,6 +23,28 @@ type Bindings = {
 type WorkerEnv = EnvVars & Bindings;
 
 let cached: { app: ReturnType<typeof createApp>; deps: Deps } | undefined;
+
+/** The part of the Workers ExecutionContext used here. */
+interface Ctx {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+/**
+ * Workers Free allows 5 cron triggers per account and they can all be taken, so requests also run
+ * maintenance, at most once an hour per isolate and after the response. Daily health checks keep it
+ * running when nobody uses the app; R2's lifecycle rule deletes audio after 32 days regardless.
+ */
+const MAINTENANCE_EVERY_MS = 60 * 60 * 1000;
+let lastMaintenance = 0;
+
+async function runMaintenance(deps: Deps) {
+  try {
+    const { deleted } = await maintenance(deps);
+    if (deleted) console.log("meetings deleted by retention", deleted);
+  } catch (e) {
+    console.error("maintenance", (e as Error).message);
+  }
+}
 
 function setup(env: WorkerEnv, origin: string) {
   if (cached) return cached;
@@ -49,11 +72,17 @@ function setup(env: WorkerEnv, origin: string) {
 }
 
 export default {
-  fetch(request: Request, env: WorkerEnv) {
-    return setup(env, new URL(request.url).origin).app.fetch(request);
+  fetch(request: Request, env: WorkerEnv, ctx?: Ctx) {
+    const { app, deps } = setup(env, new URL(request.url).origin);
+    const now = Date.now();
+    if (ctx && now - lastMaintenance >= MAINTENANCE_EVERY_MS) {
+      lastMaintenance = now;
+      ctx.waitUntil(runMaintenance(deps));
+    }
+    return app.fetch(request);
   },
   async scheduled(_event: unknown, env: WorkerEnv) {
-    const { deleted } = await maintenance(setup(env, String(env.MINUTECA_ORIGIN ?? "http://localhost")).deps);
-    if (deleted) console.log("meetings deleted by retention", deleted);
+    lastMaintenance = Date.now();
+    await runMaintenance(setup(env, String(env.MINUTECA_ORIGIN ?? "http://localhost")).deps);
   },
 };

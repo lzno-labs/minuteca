@@ -1,10 +1,12 @@
+import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "../../src/server/llm/anthropic.ts";
-import { gemini } from "../../src/server/llm/gemini.ts";
+import { gemini, thinkingLevel } from "../../src/server/llm/gemini.ts";
 import { LlmError } from "../../src/server/llm/llm.ts";
 import { localChat, openaiChat, openrouter } from "../../src/server/llm/openai-chat.ts";
 import { firstJsonObject, parseSuggestions, transcriptLines } from "../../src/server/minutes.ts";
+import { keepAlive } from "../../src/server/app.ts";
 import { transcript } from "./helpers.ts";
 
 const req = { system: "sys", prompt: "hola", maxTokens: 100 };
@@ -67,21 +69,55 @@ describe("chat completions adapters", () => {
 });
 
 describe("Gemini adapter", () => {
-  it("uses the key header, the system instruction and reads the parts", async () => {
+  /** Gemini's server-sent events, cut into pieces that do not follow line ends. */
+  const sse = (chunks: object[], cut = 7) => {
+    const text = chunks.map((c) => `data: ${JSON.stringify(c)}\r\n\r\n`).join("");
+    const bytes = new TextEncoder().encode(text);
+    return new Response(new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < bytes.length; i += cut) controller.enqueue(bytes.subarray(i, i + cut));
+        controller.close();
+      },
+    }), { headers: { "Content-Type": "text/event-stream" } });
+  };
+
+  it("streams the answer with the key header, the system instruction and a thinking level", async () => {
     let seen: { url: string; init: RequestInit } | undefined;
     const fetcher = (async (url: string, init: RequestInit) => {
       seen = { url, init };
-      return new Response(JSON.stringify({ modelVersion: "gemini-x", candidates: [{ content: { parts: [{ text: "A" }, { text: "B" }] } }], usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2 } }));
+      return sse([
+        { candidates: [{ content: { parts: [{ text: "pensando", thought: true }, { text: "Á" }] } }] },
+        { candidates: [{ content: { parts: [{ text: "B" }] }, finishReason: "STOP" }], modelVersion: "gemini-x",
+          usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2, thoughtsTokenCount: 3 } },
+      ]);
     }) as typeof fetch;
     expect(gemini(fetcher).defaultModel).toBe("gemini-3.8-flash");
-    const r = await gemini(fetcher).complete({ ...req, json: true }, { apiKey: "g", model: "gemini-3.8-flash" });
-    expect(r).toEqual({ text: "AB", model: "gemini-x", inputTokens: 4, outputTokens: 2 });
-    expect(seen!.url).toContain("/models/gemini-3.8-flash:generateContent");
+    const r = await gemini(fetcher).complete({ ...req, json: true, effort: "low" }, { apiKey: "g", model: "gemini-3.8-flash" });
+    expect(r).toEqual({ text: "ÁB", model: "gemini-x", inputTokens: 4, outputTokens: 5 });
+    expect(seen!.url).toContain("/models/gemini-3.8-flash:streamGenerateContent?alt=sse");
     expect(seen!.url).not.toContain("key=");
     expect((seen!.init.headers as Record<string, string>)["x-goog-api-key"]).toBe("g");
     const body = JSON.parse(String(seen!.init.body));
     expect(body.systemInstruction.parts[0].text).toBe("sys");
-    expect(body.generationConfig.responseMimeType).toBe("application/json");
+    expect(body.generationConfig).toMatchObject({ responseMimeType: "application/json", thinkingConfig: { thinkingLevel: "LOW" } });
+  });
+
+  it("sends a thinking level only to Gemini 3 and later", () => {
+    expect(thinkingLevel("gemini-3.8-flash", "medium")).toBe("MEDIUM");
+    expect(thinkingLevel("gemini-4-pro", "high")).toBe("HIGH");
+    expect(thinkingLevel("gemini-2.5-flash", "low")).toBeUndefined();
+    expect(thinkingLevel("gemini-flash-latest", "low")).toBeUndefined();
+    expect(thinkingLevel("gemini-3.8-flash", undefined)).toBeUndefined();
+  });
+
+  it("explains streams that end without an answer or break off", async () => {
+    const run = (res: () => Response) => gemini((async () => res()) as unknown as typeof fetch).complete(req, { apiKey: "g", model: "gemini-3.8-flash" });
+    await expect(run(() => sse([{ candidates: [{ content: { parts: [] }, finishReason: "MAX_TOKENS" }] }]))).rejects.toMatchObject({ code: "too_long" });
+    await expect(run(() => sse([{ candidates: [{ finishReason: "SAFETY" }] }]))).rejects.toMatchObject({ code: "refused" });
+    await expect(run(() => sse([{ promptFeedback: { blockReason: "OTHER" } }]))).rejects.toMatchObject({ code: "refused" });
+    await expect(run(() => sse([{ error: { status: "UNAVAILABLE", code: 503 } }]))).rejects.toMatchObject({ code: "unavailable", message: "gemini stream UNAVAILABLE" });
+    const broken = () => new Response(new ReadableStream({ pull(c) { c.error(new Error("Network connection lost")); } }));
+    await expect(run(broken)).rejects.toMatchObject({ code: "unavailable", message: "gemini stream broke off" });
   });
 
   it("tells a location block and other refusals apart, logging only status codes", async () => {
@@ -118,5 +154,39 @@ describe("prompt helpers", () => {
     expect(firstJsonObject("sin json")).toBeNull();
     const ok = parseSuggestions({ speakers: [{ speaker: 1, name: " Marco ", evidence: "x" }, { speaker: 1, name: "Otro" }, { speaker: "2", name: "Ana" }, { speaker: 9, name: "Z" }] }, new Set([0, 1, 2]));
     expect(ok).toEqual([{ speaker: 1, name: "Marco", evidence: "x" }, { speaker: 2, name: "Ana", evidence: "" }]);
+  });
+});
+
+describe("slow answers", () => {
+  const later = <T>(ms: number, value: T) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
+
+  it("go out as they are when they are quick", async () => {
+    const res = await keepAlive(later(5, Response.json({ ok: 1 }, { status: 201 })), { after: 50, every: 10 });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: 1 });
+  });
+
+  it("keep the connection alive with spaces, then send the JSON or the error with its status", async () => {
+    const res = await keepAlive(later(60, Response.json({ minutes: "x" })), { after: 10, every: 15 });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toMatch(/^ {2,}\{"minutes":"x"\}$/);
+    const failed = await keepAlive(later(30, Response.json({ error: "llm_unavailable" }, { status: 502 })), { after: 5, every: 10 });
+    expect(JSON.parse(await failed.text())).toEqual({ error: "llm_unavailable", errorStatus: 502 });
+    const crashed = await keepAlive(later(20, null).then(() => Promise.reject(new Error("boom"))), { after: 5, every: 10 });
+    expect(await crashed.json()).toEqual({ error: "generic", errorStatus: 500 });
+  });
+
+  it("work inside a Hono route whose answer comes after the handler returned", async () => {
+    const app = new Hono();
+    app.use("*", async (c, next) => {
+      await next();
+      c.res.headers.set("X-Content-Type-Options", "nosniff");
+    });
+    app.post("/slow", (c) => keepAlive(later(40, null).then(() => c.json({ error: "llm_unavailable" }, 502)), { after: 5, every: 10 }));
+    const res = await app.request("/slow", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(JSON.parse(await res.text())).toEqual({ error: "llm_unavailable", errorStatus: 502 });
   });
 });

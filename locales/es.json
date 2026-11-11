@@ -161,7 +161,8 @@
     "waitingAudio": "Esta reunión todavía no tiene audio. Si la grabaste en el iPhone, abre la grabadora para que termine de subirla.",
     "deleteShort": "Eliminar",
     "more": "Más acciones",
-    "views": "Vistas de la reunión"
+    "views": "Vistas de la reunión",
+    "transcribedLocal": "Transcrita en una computadora, sin proveedor de IA"
   },
   "speakers": {
     "title": "Hablantes",

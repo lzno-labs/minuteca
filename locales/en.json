@@ -161,7 +161,8 @@
     "waitingAudio": "This meeting has no audio yet. If you recorded it on the iPhone, open the recorder so it finishes uploading.",
     "deleteShort": "Delete",
     "more": "More actions",
-    "views": "Meeting views"
+    "views": "Meeting views",
+    "transcribedLocal": "Transcribed on a computer, with no AI provider"
   },
   "speakers": {
     "title": "Speakers",

@@ -1,0 +1,47 @@
+# Installers of the desktop app for Mac and Windows (docs/adr/0005), on GitHub-hosted runners, no
+# secrets. Manual while the repo is private (macOS minutes count ten times). The Mac build carries an
+# ad hoc signature; the Developer ID signature and notarization run from lzno-labs/empresa.
+name: desktop
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac --arm64 --x64
+          - os: windows-latest
+            target: --win --x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Engine for Intel Macs too (npm installs only the runner's own)
+        if: runner.os == 'macOS'
+        run: npm install --no-save --force sherpa-onnx-darwin-x64@2.0.1
+      - run: node build.mjs
+      - run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minuteca-${{ runner.os }}
+          path: |
+            desktop/release/*.dmg
+            desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 30

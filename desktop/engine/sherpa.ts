@@ -11,14 +11,18 @@ import type { Engine } from "./pipeline.ts";
  */
 export const DEFAULT_THRESHOLD = 0.5;
 
-export function sherpaEngine(dir: string, threads: number): Engine {
+/** sherpa-onnx-node from desktop/node_modules (the command line). The desktop app passes its own. */
+export function loadSherpa(): unknown {
   const require = createRequire(new URL("../package.json", import.meta.url));
-  let sherpa: any;
   try {
-    sherpa = require("sherpa-onnx-node");
+    return require("sherpa-onnx-node");
   } catch {
     throw new Error("sherpa-onnx-node is not installed: run  npm ci --prefix desktop");
   }
+}
+
+export function sherpaEngine(dir: string, threads: number, module: unknown = loadSherpa()): Engine {
+  const sherpa = module as any;
   const diarizer = (threshold: number) =>
     new sherpa.OfflineSpeakerDiarization({
       segmentation: { pyannote: { model: modelPath(dir, "segmentation/model.onnx") }, numThreads: threads },

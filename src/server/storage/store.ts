@@ -18,7 +18,15 @@ export interface User {
   /** Model chosen per language model provider; missing means the provider's default. */
   llmModels: Partial<Record<LlmProviderId, string>>;
   minutesInstructions: string;
+  /** What runs on its own once a transcription finishes (docs/design/automatic-minutes-and-revisions.md). */
+  autoSteps: AutoStep[];
 }
+
+/** Steps that can run on their own after a transcription, in this order. */
+export const AUTO_STEPS = ["names", "minutes"] as const;
+export type AutoStep = (typeof AUTO_STEPS)[number];
+export const isAutoStep = (s: unknown): s is AutoStep => AUTO_STEPS.includes(s as AutoStep);
+const autoList = (v: unknown): AutoStep[] => AUTO_STEPS.filter((s) => String(v ?? "").split(",").includes(s));
 
 export const isConsentId = (c: unknown): c is string =>
   isProvider(c) || (typeof c === "string" && c.startsWith("llm:") && isLlmProvider(c.slice(4)));
@@ -63,9 +71,36 @@ export interface MinutesRow {
   provider: string;
   model: string;
   edited: number;
+  /** The provider that last changed it on the person's request, if any. */
+  revised_with: string | null;
+  /** Earlier texts that "undo" can bring back. */
+  undo_count: number;
   created_at: number;
   updated_at: number;
 }
+
+const MINUTES_COLUMNS = "id, body, provider, model, edited, revised_with, json_array_length(undo) AS undo_count, created_at, updated_at";
+
+/** Earlier texts kept per minutes version for "undo", within D1's 2 MB per row. */
+export const MAX_UNDO = 5;
+const MAX_UNDO_CHARS = 500_000;
+
+interface UndoEntry {
+  body: string;
+  edited: number;
+  revised_with: string | null;
+}
+
+function undoList(json: string): UndoEntry[] {
+  try {
+    const v = JSON.parse(json) as unknown;
+    return Array.isArray(v) ? v.filter((e): e is UndoEntry => typeof (e as UndoEntry)?.body === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export type EditOutcome = "ok" | "not_found" | "changed";
 
 /** converting: the provider answered; the answer waits for the browser to turn it into a transcript. */
 export type MeetingStatus = "created" | "uploaded" | "transcribing" | "converting" | "done" | "error";
@@ -90,6 +125,8 @@ export interface MeetingRow {
   job_token_hash: string | null;
   job_started_at: number | null;
   usage_id: number | null;
+  /** Automatic steps still to run for the current transcript ("names,minutes"). */
+  auto_pending: string;
   created_at: number;
   expires_at: number;
 }
@@ -97,6 +134,9 @@ export interface MeetingRow {
 export type KeySource = "own" | "hosted";
 
 const DAY = 86_400_000;
+
+/** A new transcript gets the person's automatic steps; none without a default language model. */
+const AUTO_PENDING = "auto_pending = COALESCE((SELECT CASE WHEN u.llm_provider IS NULL THEN '' ELSE u.auto_steps END FROM users u WHERE u.id = meetings.user_id), '')";
 export const monthOf = (ms: number): string => new Date(ms).toISOString().slice(0, 7);
 
 function userFrom(row: Record<string, unknown> | null): User | null {
@@ -123,6 +163,7 @@ function userFrom(row: Record<string, unknown> | null): User | null {
     llmProvider: isLlmProvider(row.llm_provider) ? row.llm_provider : null,
     llmModels,
     minutesInstructions: String(row.minutes_instructions ?? ""),
+    autoSteps: autoList(row.auto_steps),
   };
 }
 
@@ -169,6 +210,9 @@ export class Store {
   }
   async setLlmSettings(userId: string, s: { provider: LlmProviderId | null; models: Partial<Record<LlmProviderId, string>>; instructions: string }) {
     await this.db.run("UPDATE users SET llm_provider = ?, llm_models = ?, minutes_instructions = ? WHERE id = ?", [s.provider, JSON.stringify(s.models), s.instructions, userId]);
+  }
+  async setAutoSteps(userId: string, steps: AutoStep[]) {
+    await this.db.run("UPDATE users SET auto_steps = ? WHERE id = ?", [AUTO_STEPS.filter((s) => steps.includes(s)).join(","), userId]);
   }
   async setConsents(userId: string, consents: string[]) {
     await this.db.run("UPDATE users SET consents = ? WHERE id = ?", [JSON.stringify([...new Set(consents)]), userId]);
@@ -300,7 +344,7 @@ export class Store {
       ...archiveTranscript(id, now, ["transcribing", "converting"]),
       { sql: "INSERT INTO transcripts (meeting_id, body) VALUES (?, ?) ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body", params: [id, JSON.stringify(t)] },
       {
-        sql: "UPDATE meetings SET status = 'done', error = NULL, duration = ?, language = ?, speaker_names = '{}', job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')",
+        sql: `UPDATE meetings SET status = 'done', error = NULL, duration = ?, language = ?, speaker_names = '{}', job_token_hash = NULL, ${AUTO_PENDING} WHERE id = ? AND status IN ('transcribing', 'converting')`,
         params: [t.duration, t.language, id],
       },
     ]);
@@ -311,7 +355,7 @@ export class Store {
       ...archiveTranscript(id, now, ["uploaded", "error", "done"]),
       { sql: "INSERT INTO transcripts (meeting_id, body) VALUES (?, ?) ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body", params: [id, JSON.stringify(t)] },
       {
-        sql: "UPDATE meetings SET status = 'done', error = NULL, provider = 'local', key_source = NULL, duration = ?, language = ?, speaker_names = '{}', job_id = NULL, job_token_hash = NULL WHERE id = ? AND status IN ('uploaded', 'error', 'done')",
+        sql: `UPDATE meetings SET status = 'done', error = NULL, provider = 'local', key_source = NULL, duration = ?, language = ?, speaker_names = '{}', job_id = NULL, job_token_hash = NULL, ${AUTO_PENDING} WHERE id = ? AND status IN ('uploaded', 'error', 'done')`,
         params: [t.duration, t.language, id],
       },
     ]);
@@ -326,6 +370,41 @@ export class Store {
        WHERE id = ? AND status IN ('transcribing', 'converting')`,
       [error, id],
     );
+  }
+
+  /* ---------- automatic steps ---------- */
+
+  /** Takes one pending step of a finished meeting, once: false if it is not pending (or another tab took it). */
+  async takeAutoStep(userId: string, meetingId: string, step: AutoStep): Promise<boolean> {
+    const row = await this.db.first<{ auto_pending: string }>("SELECT auto_pending FROM meetings WHERE id = ? AND user_id = ? AND status = 'done'", [meetingId, userId]);
+    if (!row || !autoList(row.auto_pending).includes(step)) return false;
+    const rest = autoList(row.auto_pending).filter((s) => s !== step).join(",");
+    const { changes } = await this.db.run("UPDATE meetings SET auto_pending = ? WHERE id = ? AND auto_pending = ?", [rest, meetingId, row.auto_pending]);
+    return changes > 0;
+  }
+  async clearAutoSteps(userId: string, meetingId: string) {
+    await this.db.run("UPDATE meetings SET auto_pending = '' WHERE id = ? AND user_id = ?", [meetingId, userId]);
+  }
+  /** Gives names to voices that have none yet; a name typed meanwhile wins. Returns what was applied. */
+  async fillSpeakerNames(meetingId: string, names: Record<string, string>): Promise<Record<string, string>> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const row = await this.db.first<{ speaker_names: string }>("SELECT speaker_names FROM meetings WHERE id = ?", [meetingId]);
+      if (!row) return {};
+      let current: Record<string, string> = {};
+      try {
+        current = JSON.parse(row.speaker_names) as Record<string, string>;
+      } catch {
+        current = {};
+      }
+      const applied: Record<string, string> = {};
+      for (const [k, v] of Object.entries(names)) {
+        if (!current[k]?.trim()) applied[k] = v;
+      }
+      if (!Object.keys(applied).length) return {};
+      const { changes } = await this.db.run("UPDATE meetings SET speaker_names = ? WHERE id = ? AND speaker_names = ?", [JSON.stringify({ ...current, ...applied }), meetingId, row.speaker_names]);
+      if (changes) return applied;
+    }
+    return {};
   }
 
   /* ---------- earlier transcripts ---------- */
@@ -354,7 +433,7 @@ export class Store {
         params: [versionId, meetingId],
       },
       {
-        sql: `UPDATE meetings SET provider = ${pick("provider")}, speaker_names = ${pick("speaker_names")}, duration = ${pick("duration")}, language = ${pick("language")}, key_source = NULL, error = NULL WHERE id = ? AND status = 'done'`,
+        sql: `UPDATE meetings SET provider = ${pick("provider")}, speaker_names = ${pick("speaker_names")}, duration = ${pick("duration")}, language = ${pick("language")}, key_source = NULL, error = NULL, auto_pending = '' WHERE id = ? AND status = 'done'`,
         params: [meetingId],
       },
       { sql: "DELETE FROM transcript_versions WHERE id = ? AND meeting_id = ?", params: [versionId, meetingId] },
@@ -371,13 +450,13 @@ export class Store {
 
   /** Every version of a meeting's minutes, newest first (one per generation, to compare models). */
   async minutesList(meetingId: string) {
-    return this.db.all<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC", [meetingId]);
+    return this.db.all<MinutesRow>(`SELECT ${MINUTES_COLUMNS} FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC`, [meetingId]);
   }
   /** The newest version, or one by id. */
   async minutes(meetingId: string, id?: number) {
     return id === undefined
-      ? this.db.first<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", [meetingId])
-      : this.db.first<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? AND id = ?", [meetingId, id]);
+      ? this.db.first<MinutesRow>(`SELECT ${MINUTES_COLUMNS} FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [meetingId])
+      : this.db.first<MinutesRow>(`SELECT ${MINUTES_COLUMNS} FROM minutes WHERE meeting_id = ? AND id = ?`, [meetingId, id]);
   }
   /** A new version; only the newest MAX_MINUTES_VERSIONS are kept. */
   async addMinutes(meetingId: string, m: { body: string; provider: string; model: string }, now: number) {
@@ -387,9 +466,38 @@ export class Store {
       [meetingId, meetingId, MAX_MINUTES_VERSIONS],
     );
   }
-  async editMinutes(meetingId: string, id: number, body: string, now: number) {
-    const { changes } = await this.db.run("UPDATE minutes SET body = ?, edited = 1, updated_at = ? WHERE meeting_id = ? AND id = ?", [body, now, meetingId, id]);
-    return changes > 0;
+  /**
+   * Changes a version's text, by hand or on request to a model (revisedWith); the previous text can
+   * be brought back with undoMinutes. With `expected`, refuses if the text changed meanwhile.
+   */
+  async editMinutes(meetingId: string, id: number, body: string, now: number, opts: { revisedWith?: string; expected?: string } = {}): Promise<EditOutcome> {
+    const row = await this.db.first<{ body: string; edited: number; revised_with: string | null; undo: string }>(
+      "SELECT body, edited, revised_with, undo FROM minutes WHERE meeting_id = ? AND id = ?",
+      [meetingId, id],
+    );
+    if (!row) return "not_found";
+    if (opts.expected !== undefined && row.body !== opts.expected) return "changed";
+    if (row.body === body) return "ok";
+    const undo = [...undoList(row.undo), { body: row.body, edited: row.edited, revised_with: row.revised_with }];
+    while (undo.length > MAX_UNDO || (undo.length > 1 && JSON.stringify(undo).length > MAX_UNDO_CHARS)) undo.shift();
+    const { changes } = await this.db.run(
+      "UPDATE minutes SET body = ?, edited = 1, revised_with = ?, undo = ?, updated_at = ? WHERE meeting_id = ? AND id = ? AND body = ?",
+      [body, opts.revisedWith ?? row.revised_with, JSON.stringify(undo), now, meetingId, id, row.body],
+    );
+    return changes > 0 ? "ok" : "changed";
+  }
+  /** Brings back the text before the last change. */
+  async undoMinutes(meetingId: string, id: number, now: number): Promise<EditOutcome> {
+    const row = await this.db.first<{ body: string; undo: string }>("SELECT body, undo FROM minutes WHERE meeting_id = ? AND id = ?", [meetingId, id]);
+    if (!row) return "not_found";
+    const undo = undoList(row.undo);
+    const last = undo.pop();
+    if (!last) return "not_found";
+    const { changes } = await this.db.run(
+      "UPDATE minutes SET body = ?, edited = ?, revised_with = ?, undo = ?, updated_at = ? WHERE meeting_id = ? AND id = ? AND body = ?",
+      [last.body, last.edited, last.revised_with, JSON.stringify(undo), now, meetingId, id, row.body],
+    );
+    return changes > 0 ? "ok" : "changed";
   }
   /** One version, or all of them. */
   async deleteMinutes(meetingId: string, id?: number) {

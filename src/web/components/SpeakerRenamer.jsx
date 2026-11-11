@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Sparkles, Users } from "lucide-react";
 import { api } from "../lib/api";
 import { llmMissing, startingLlm } from "../lib/llm";
@@ -12,7 +12,7 @@ import { useI18n } from "../i18n";
  * One input per detected speaker. Typing a name updates the transcript and
  * all exports immediately. Giving two speakers the same name merges them.
  */
-export default function SpeakerRenamer({ meetingId, me, onMeChange, onOpenSettings, utterances, speakerNames, onChange }) {
+export default function SpeakerRenamer({ meetingId, me, onMeChange, onOpenSettings, utterances, speakerNames, onChange, autoBusy = false, autoSuggestions = null }) {
   const { t } = useI18n();
   const stats = speakerStats(utterances);
   const total = stats.reduce((n, s) => n + s.seconds, 0) || 1;
@@ -23,6 +23,13 @@ export default function SpeakerRenamer({ meetingId, me, onMeChange, onOpenSettin
   const [provider, setProvider] = useState(() => startingLlm(me));
   const [usedProvider, setUsedProvider] = useState(null);
   const ready = me && provider && !llmMissing(me, provider);
+
+  // Names put on their own: the ones not applied (role guesses) stay here as suggestions.
+  useEffect(() => {
+    if (!autoSuggestions?.suggestions?.length) return;
+    setSuggestions(Object.fromEntries(autoSuggestions.suggestions.map((s) => [s.speaker, s])));
+    setUsedProvider(autoSuggestions.provider);
+  }, [autoSuggestions]);
 
   const suggest = async () => {
     if (!ready) return onOpenSettings?.();
@@ -60,11 +67,11 @@ export default function SpeakerRenamer({ meetingId, me, onMeChange, onOpenSettin
             <button
               type="button"
               onClick={suggest}
-              disabled={busy}
+              disabled={busy || autoBusy}
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
               title={t("speakers.suggestHint")}
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {t("speakers.suggest")}
+              {busy || autoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {t("speakers.suggest")}
             </button>
           </div>
         )}

@@ -7,7 +7,7 @@
 import { t } from "./i18n.ts";
 import type { KeyVault } from "./keys.ts";
 import { isLlmProvider, LlmError, type LlmAdapter, type LlmProviderId, type LlmRequest, type LlmResult } from "./llm/llm.ts";
-import type { MeetingRow, Store, User } from "./storage/store.ts";
+import type { MeetingRow, MinutesRow, Store, User } from "./storage/store.ts";
 import type { Transcript } from "./transcriber/transcriber.ts";
 
 export interface MinutesDeps {
@@ -19,7 +19,7 @@ export interface MinutesDeps {
   timeZone: string;
 }
 
-export type MinutesErrorCode = "no_llm" | "no_llm_key" | "no_llm_consent" | "not_found" | "not_transcribed" | "invalid_provider";
+export type MinutesErrorCode = "no_llm" | "no_llm_key" | "no_llm_consent" | "not_found" | "not_transcribed" | "invalid_provider" | "invalid_instruction" | "minutes_changed";
 
 export class MinutesError extends Error {
   code: MinutesErrorCode;
@@ -36,17 +36,15 @@ export function modelFor(user: User, adapter: LlmAdapter): string {
   return user.llmModels[adapter.id] || adapter.defaultModel;
 }
 
-/** THE function every language model call goes through. */
-export async function runLlm(
-  deps: MinutesDeps,
-  user: User,
-  call: { purpose: "speakers" | "minutes"; meetingId: string | null; request: LlmRequest; provider?: unknown },
-): Promise<LlmResult & { provider: LlmProviderId }> {
-  // The person's default, or the one they picked for this generation (to compare models).
+/**
+ * The provider a call will use, checked: the person's default, or the one they picked for this
+ * generation (to compare models). Throws when there is no permission or key for it.
+ */
+export async function pickLlm(deps: MinutesDeps, user: User, wanted?: unknown): Promise<{ provider: LlmProviderId; adapter: LlmAdapter; apiKey: string }> {
   let provider = user.llmProvider;
-  if (call.provider !== undefined && call.provider !== null) {
-    if (!isLlmProvider(call.provider) || !deps.llm[call.provider]) throw new MinutesError("invalid_provider", 400);
-    provider = call.provider;
+  if (wanted !== undefined && wanted !== null) {
+    if (!isLlmProvider(wanted) || !deps.llm[wanted]) throw new MinutesError("invalid_provider", 400);
+    provider = wanted;
   }
   const adapter = provider ? deps.llm[provider] : undefined;
   if (!provider || !adapter) throw new MinutesError("no_llm", 409);
@@ -57,6 +55,16 @@ export async function runLlm(
     if (!sealed || !deps.vault) throw new MinutesError("no_llm_key", 402);
     apiKey = await deps.vault.open(user.id, provider, sealed);
   }
+  return { provider, adapter, apiKey };
+}
+
+/** THE function every language model call goes through. */
+export async function runLlm(
+  deps: MinutesDeps,
+  user: User,
+  call: { purpose: "speakers" | "minutes" | "revise"; meetingId: string | null; request: LlmRequest; provider?: unknown },
+): Promise<LlmResult & { provider: LlmProviderId }> {
+  const { provider, adapter, apiKey } = await pickLlm(deps, user, call.provider);
   const result = await adapter.complete(call.request, { apiKey, model: modelFor(user, adapter) });
   await deps.store.addLlmUsage({
     userId: user.id,
@@ -210,4 +218,94 @@ export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: 
   // A new version each time, so different models can be compared side by side.
   await deps.store.addMinutes(m.id, { body: result.text, provider: result.provider, model: result.model }, deps.now());
   return (await deps.store.minutes(m.id))!;
+}
+
+/* ---------- automatic steps (docs/design/automatic-minutes-and-revisions.md) ---------- */
+
+/**
+ * Names after a transcription, without a click: suggestions with high or medium confidence go to
+ * voices that have no name yet. The default provider is checked before the step is taken, so a
+ * missing permission or key leaves it pending; once taken, it never runs again on its own.
+ */
+export async function autoNames(deps: MinutesDeps, user: User, meetingId: string, lang: string) {
+  await pickLlm(deps, user);
+  if (!(await deps.store.takeAutoStep(user.id, meetingId, "names"))) return { skipped: true as const };
+  const r = await suggestSpeakers(deps, user, meetingId, lang);
+  const sure = Object.fromEntries(r.suggestions.filter((s) => s.confidence !== "low").map((s) => [String(s.speaker), s.name]));
+  return { ...r, applied: await deps.store.fillSpeakerNames(meetingId, sure) };
+}
+
+/** Minutes after a transcription (and its names), without a click; same rules as autoNames. */
+export async function autoMinutes(deps: MinutesDeps, user: User, meetingId: string, lang: string): Promise<MinutesRow | { skipped: true }> {
+  await pickLlm(deps, user);
+  if (!(await deps.store.takeAutoStep(user.id, meetingId, "minutes"))) return { skipped: true as const };
+  return generateMinutes(deps, user, meetingId, lang);
+}
+
+/* ---------- revising minutes on request ---------- */
+
+export const MAX_REQUEST = 2000;
+
+/** A model's Markdown without a code fence around all of it. */
+export function cleanMarkdown(text: string): string {
+  const s = text.trim();
+  const fenced = /^```(?:markdown|md)?[ \t]*\n([\s\S]*?)\n```$/i.exec(s);
+  return (fenced ? fenced[1]! : s).trim();
+}
+
+/**
+ * Changes a version of the minutes as the person asks ("add that Ana presents it on Friday"), all
+ * of it or one part (a section, as the app shows it). The model gets the transcript to check facts.
+ * The change can be undone; it is refused if the minutes changed meanwhile.
+ */
+export async function reviseMinutes(
+  deps: MinutesDeps,
+  user: User,
+  meetingId: string,
+  versionId: number,
+  lang: string,
+  req: { instruction?: unknown; part?: unknown; provider?: unknown },
+): Promise<MinutesRow> {
+  const instruction = typeof req.instruction === "string" ? req.instruction.trim() : "";
+  if (!instruction || instruction.length > MAX_REQUEST) throw new MinutesError("invalid_instruction", 400);
+  if (req.part !== undefined && (typeof req.part !== "string" || !req.part.trim())) throw new MinutesError("invalid_instruction", 400);
+  const part = req.part as string | undefined;
+  const { m, tr, names } = await transcribed(deps, user, meetingId);
+  const current = await deps.store.minutes(m.id, versionId);
+  if (!current) throw new MinutesError("not_found", 404);
+  const start = part === undefined ? 0 : current.body.indexOf(part);
+  if (start < 0) throw new MinutesError("minutes_changed", 409);
+  const label = (s: number) => names[String(s)]?.trim() || defaultName(lang, s);
+  const result = await runLlm(deps, user, {
+    purpose: "revise",
+    meetingId: m.id,
+    provider: req.provider,
+    request: {
+      system: t(lang, "prompts.revise.system"),
+      prompt: t(lang, part === undefined ? "prompts.revise.whole" : "prompts.revise.part", {
+        title: m.title,
+        participants: [...new Set(tr.blocks.map((b) => label(b.speaker)))].join(", "),
+        transcript: transcriptLines(tr, label),
+        minutes: current.body,
+        part: part?.trim() ?? "",
+        request: instruction,
+      }),
+      maxTokens: 16000,
+      effort: part === undefined ? "medium" : "low",
+    },
+  });
+  let text = cleanMarkdown(result.text);
+  let body = text;
+  if (part !== undefined) {
+    // Only the part comes back: keep its heading if the model dropped it, and the spacing around it.
+    const heading = part.trim().split("\n")[0]!;
+    if (/^#{1,6}\s/.test(heading) && !/^#{1,6}\s/.test(text)) text = `${heading}\n\n${text}`;
+    const lead = /^\s*/.exec(part)![0];
+    const trail = /\s*$/.exec(part)![0];
+    body = current.body.slice(0, start) + lead + text + trail + current.body.slice(start + part.length);
+  }
+  const outcome = await deps.store.editMinutes(m.id, current.id, body, deps.now(), { revisedWith: result.provider, expected: current.body });
+  if (outcome === "not_found") throw new MinutesError("not_found", 404);
+  if (outcome === "changed") throw new MinutesError("minutes_changed", 409);
+  return (await deps.store.minutes(m.id, current.id))!;
 }

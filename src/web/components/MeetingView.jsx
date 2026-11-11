@@ -11,6 +11,7 @@ import TranscriptViewer from "./TranscriptViewer";
 import TranscribePanel from "./TranscribePanel";
 import TranscriptVersions from "./TranscriptVersions";
 import MinutesPanel from "./MinutesPanel";
+import { AutoStatus, useAutoSteps } from "./AutoSteps";
 import Menu from "./Menu";
 import { useConfirm } from "./Confirm";
 
@@ -89,6 +90,16 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
     },
     [utterances, meetingId],
   );
+
+  // Names and minutes made on their own after the transcript, if the person turned that on.
+  const auto = useAutoSteps({
+    meeting,
+    me,
+    reload,
+    // Names typed meanwhile are saved first and win; then the names the AI put show from the server.
+    beforeNames: flush,
+    afterNames: () => setDraft(({ speakerNames: _names, ...rest }) => rest),
+  });
 
   const onSeek = useCallback((time) => {
     const a = audioRef.current;
@@ -232,6 +243,7 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
 
       {done && (
         <>
+          <AutoStatus auto={auto} />
           <div role="tablist" aria-label={t("meeting.views")} className="flex gap-1 rounded-xl bg-slate-100 p-1">
             {[
               ["transcript", t("transcript.title")],
@@ -253,7 +265,14 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
             })}
           </div>
           {(tab ?? (meeting.minutes ? "minutes" : "transcript")) === "minutes" ? (
-            <MinutesPanel meeting={meeting} me={me} onMeChange={onMeChange} onChanged={reload} onOpenSettings={onOpenSettings} />
+            <MinutesPanel
+              meeting={meeting}
+              me={me}
+              onMeChange={onMeChange}
+              onChanged={reload}
+              onOpenSettings={onOpenSettings}
+              autoWriting={auto.running === "minutes" ? auto.provider : null}
+            />
           ) : (
             <>
               <ExportToolbar meeting={meeting} onDownloadAudio={() => getAudioBlob(meetingId)} />
@@ -263,6 +282,8 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
                 me={me}
                 onMeChange={onMeChange}
                 onOpenSettings={onOpenSettings}
+                autoBusy={auto.running === "names"}
+                autoSuggestions={auto.names}
                 utterances={meeting.utterances}
                 speakerNames={meeting.speakerNames}
                 onChange={(speakerNames) => edit({ speakerNames })}

@@ -11,6 +11,7 @@ import { audioMimeType, titleFromFileName } from "./lib/audioFile";
 import { downloadBlob, isIosBrowser, loadSettings, saveSettings } from "./lib/browser";
 import { keySource, usableProvider } from "./lib/providers";
 import LoginScreen, { AccessScreen } from "./components/LoginScreen";
+import DownloadScreen from "./components/DownloadScreen";
 import Recorder from "./components/Recorder";
 import RecoveryBanner from "./components/RecoveryBanner";
 import TranscriptionStatus from "./components/TranscriptionStatus";
@@ -36,6 +37,7 @@ export default function App() {
   }, [t]);
 
   if (window.location.pathname === "/acceso") return <AccessScreen />;
+  if (window.location.pathname === "/descargar") return <DownloadScreen />;
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-slate-400">

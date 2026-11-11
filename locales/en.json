@@ -501,5 +501,38 @@
     "cancel": "Cancel",
     "cancelled": "The transcription was cancelled.",
     "failed": "Could not transcribe on this computer: {reason}"
+  },
+  "download": {
+    "title": "minuteca for your computer",
+    "intro": "The same minuteca in its own window, and it also transcribes on your computer: the audio does not go to any AI provider.",
+    "windows": "Download for Windows",
+    "macApple": "Download for Mac with Apple chip",
+    "macIntel": "Download for Mac with Intel",
+    "macFirstOpen": "Mac: open the file and drag minuteca to Applications. The first time macOS blocks it: open it, then System Settings, Privacy & Security, \"Open Anyway\".",
+    "winFirstOpen": "Windows: the first time a blue warning appears: \"More info\", \"Run anyway\".",
+    "updates": "After that, the app tells you when there is a new version.",
+    "needs": "Needs about 1.5 GB of disk and 8 GB of RAM.",
+    "back": "Back to minuteca",
+    "allVersions": "All versions and what changed"
+  },
+  "desktopApp": {
+    "title": "Computer app",
+    "promo": "minuteca for Mac and Windows: the same app in its own window, and it transcribes on your computer without sending the audio to any AI provider.",
+    "get": "Download the app",
+    "version": "Version {version}",
+    "check": "Check for updates",
+    "checking": "Checking for updates…",
+    "current": "You have the latest version.",
+    "downloading": "Downloading version {version}…",
+    "ready": "Version {version} is ready: it installs when the app restarts.",
+    "restart": "Restart and update",
+    "available": "There is a new version: {version}.",
+    "download": "Download",
+    "later": "Later",
+    "error": "Could not check for updates. Check your connection.",
+    "dev": "Development version: it does not update itself.",
+    "readyDialog": "minuteca {version} is ready. Restart the app now to use it?",
+    "availableDialog": "There is a new version of minuteca ({version}). Download it from the minuteca page and install it over this one.",
+    "currentDialog": "You have the latest version of minuteca ({version})."
   }
 }

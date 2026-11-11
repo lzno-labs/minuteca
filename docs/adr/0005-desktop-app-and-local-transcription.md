@@ -1,6 +1,6 @@
 # ADR-0005: Desktop app for Mac and Windows with local transcription
 
-- **Status:** Accepted (PRD scope change approved by the owner, lzno-labs/empresa#34)
+- **Status:** Accepted (PRD scope change approved by the owner, lzno-labs/empresa#34); distribution superseded by ADR-0006
 - **Date:** 2026-11-10
 - **Supersedes:** none (extends ADR-0002 with a provider that runs outside the server)
 - **Author:** founding agent (claude)

@@ -1,7 +1,7 @@
 {
   "name": "minuteca-desktop",
   "productName": "minuteca",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "minuteca for Mac and Windows: the web app plus transcription on the computer",
   "author": "Lzno",
@@ -17,7 +17,8 @@
     "dist": "node build.mjs && electron-builder --publish never"
   },
   "dependencies": {
-    "sherpa-onnx-node": "2.0.1"
+    "sherpa-onnx-node": "2.0.1",
+    "electron-updater": "6.8.12"
   },
   "devDependencies": {
     "electron": "44.9.3",

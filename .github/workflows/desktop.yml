@@ -1,18 +1,28 @@
-# Installers of the desktop app for Mac and Windows (docs/adr/0005), on GitHub-hosted runners, no
-# secrets. Manual while the repo is private (macOS minutes count ten times). The Mac build carries an
-# ad hoc signature; the Developer ID signature and notarization run from lzno-labs/empresa.
+# Desktop app for Mac and Windows (docs/adr/0005), built on GitHub-hosted runners with no secrets.
+# Run by hand (Actions, desktop, Run workflow). With a version, it publishes a GitHub release
+# v<version> with the installers and the update feeds that the app and /descargar read; without one,
+# it only builds them as artifacts. Mac builds carry an ad hoc signature until there is a Developer ID.
 name: desktop
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, higher than the last release (for example 0.1.2). Empty builds without publishing.
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
+concurrency:
+  group: desktop
+  cancel-in-progress: false
+
 jobs:
   installers:
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: macos-latest
@@ -23,12 +33,21 @@ jobs:
     timeout-minutes: 45
     defaults:
       run:
+        shell: bash
         working-directory: desktop
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Version
+        run: |
+          if [ -n "$VERSION" ]; then
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid version: $VERSION" >&2; exit 1; }
+            npm version "$VERSION" --no-git-tag-version --allow-same-version
+          fi
       - run: npm ci
       - name: Engine for Intel Macs too (npm installs only the runner's own)
         if: runner.os == 'macOS'
@@ -42,6 +61,33 @@ jobs:
           name: minuteca-${{ runner.os }}
           path: |
             desktop/release/*.dmg
+            desktop/release/*.zip
             desktop/release/*.exe
+            desktop/release/*.blockmap
+            desktop/release/latest*.yml
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    if: inputs.version != ''
+    needs: installers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Publish the GitHub release (the app's updater reads it)
+        run: |
+          set -euo pipefail
+          cd release
+          ls -la
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "minuteca $VERSION para Mac y Windows" --generate-notes \
+            *.dmg *.zip *.exe *.blockmap latest*.yml

@@ -501,5 +501,38 @@
     "cancel": "Cancelar",
     "cancelled": "Se canceló la transcripción.",
     "failed": "No se pudo transcribir en esta computadora: {reason}"
+  },
+  "download": {
+    "title": "minuteca para tu computadora",
+    "intro": "La misma minuteca en su propia ventana, y además transcribe en tu computadora: el audio no sale hacia ningún proveedor de IA.",
+    "windows": "Descargar para Windows",
+    "macApple": "Descargar para Mac con chip de Apple",
+    "macIntel": "Descargar para Mac con Intel",
+    "macFirstOpen": "Mac: abre el archivo y arrastra minuteca a Aplicaciones. La primera vez macOS la bloquea: ábrela, luego Ajustes del Sistema, Privacidad y seguridad, «Abrir de todas formas».",
+    "winFirstOpen": "Windows: la primera vez aparece un aviso azul: «Más información», «Ejecutar de todas formas».",
+    "updates": "Después, la app te avisa cuando hay una versión nueva.",
+    "needs": "Necesita unos 1,5 GB de disco y 8 GB de RAM.",
+    "back": "Volver a minuteca",
+    "allVersions": "Todas las versiones y sus cambios"
+  },
+  "desktopApp": {
+    "title": "App para computadora",
+    "promo": "minuteca para Mac y Windows: la misma app en su propia ventana, y transcribe en tu computadora sin enviar el audio a ningún proveedor de IA.",
+    "get": "Descargar la app",
+    "version": "Versión {version}",
+    "check": "Buscar actualizaciones",
+    "checking": "Buscando actualizaciones…",
+    "current": "Tienes la versión más reciente.",
+    "downloading": "Descargando la versión {version}…",
+    "ready": "La versión {version} está lista: se instala al reiniciar la app.",
+    "restart": "Reiniciar y actualizar",
+    "available": "Hay una versión nueva: {version}.",
+    "download": "Descargar",
+    "later": "Más tarde",
+    "error": "No se pudo buscar actualizaciones. Revisa tu conexión.",
+    "dev": "Versión de desarrollo: no se actualiza sola.",
+    "readyDialog": "La versión {version} de minuteca está lista. ¿Reiniciar la app ahora para usarla?",
+    "availableDialog": "Hay una versión nueva de minuteca ({version}). Descárgala desde la página de minuteca e instálala encima de esta.",
+    "currentDialog": "Tienes la versión más reciente de minuteca ({version})."
   }
 }

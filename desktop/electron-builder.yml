@@ -1,5 +1,5 @@
 # Installers for Mac and Windows (docs/adr/0005). Each platform builds on its own GitHub-hosted runner,
-# so npm installs the right sherpa-onnx binary. Signing for Mac runs from lzno-labs/empresa.
+# so npm installs the right sherpa-onnx binary. Releases go to GitHub (.github/workflows/desktop.yml).
 appId: app.lzno.minuteca.desktop
 productName: minuteca
 copyright: Lzno
@@ -16,8 +16,11 @@ protocols:
   - name: minuteca
     schemes: [minuteca]
 mac:
+  # The DMG is for the first install; the ZIP is what the updater downloads.
   target:
     - target: dmg
+      arch: [arm64, x64]
+    - target: zip
       arch: [arm64, x64]
   category: public.app-category.productivity
   # Ad hoc signature until the Developer ID one: Apple Silicon refuses unsigned code.
@@ -25,7 +28,8 @@ mac:
   hardenedRuntime: false
   extendInfo:
     NSMicrophoneUsageDescription: minuteca usa el micrófono para grabar tus reuniones.
-  artifactName: minuteca-${version}-mac-${arch}.${ext}
+  # Same names in every release, so /descargar can link to releases/latest/download/<name>.
+  artifactName: minuteca-mac-${arch}.${ext}
 dmg:
   title: minuteca
 win:
@@ -35,7 +39,12 @@ win:
 nsis:
   oneClick: true
   perMachine: false
-  artifactName: minuteca-${version}-windows-${arch}.${ext}
+  artifactName: minuteca-windows-${arch}.${ext}
 linux:
   target: [dir]
-publish: null
+# Update feeds (latest.yml, latest-mac.yml) and the updater's source: this repo's GitHub releases.
+publish:
+  provider: github
+  owner: lzno-labs
+  repo: minuteca
+  releaseType: release

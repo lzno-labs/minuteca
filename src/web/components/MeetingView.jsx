@@ -130,7 +130,11 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
     meeting.duration > 0 ? formatDuration(meeting.duration) : null,
   ].filter(Boolean);
   const footnote = [
-    done && meeting.provider ? t("meeting.transcribedBy", { provider: t(`providers.${meeting.provider}.name`) }) : null,
+    done && meeting.provider
+      ? meeting.provider === "local"
+        ? t("meeting.transcribedLocal")
+        : t("meeting.transcribedBy", { provider: t(`providers.${meeting.provider}.name`) })
+      : null,
     expiresIn !== null ? t("meeting.expires", { date: meeting.expiresAt.toLocaleDateString(locale, { day: "numeric", month: "long" }) }) : null,
   ].filter(Boolean);
 

@@ -1,0 +1,41 @@
+# Installers for Mac and Windows (docs/adr/0005). Each platform builds on its own GitHub-hosted runner,
+# so npm installs the right sherpa-onnx binary. Signing for Mac runs from lzno-labs/empresa.
+appId: app.lzno.minuteca.desktop
+productName: minuteca
+copyright: Lzno
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/sherpa-onnx-*/**"
+protocols:
+  - name: minuteca
+    schemes: [minuteca]
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  # Ad hoc signature until the Developer ID one: Apple Silicon refuses unsigned code.
+  identity: "-"
+  hardenedRuntime: false
+  extendInfo:
+    NSMicrophoneUsageDescription: minuteca usa el micrófono para grabar tus reuniones.
+  artifactName: minuteca-${version}-mac-${arch}.${ext}
+dmg:
+  title: minuteca
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: minuteca-${version}-windows-${arch}.${ext}
+linux:
+  target: [dir]
+publish: null

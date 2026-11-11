@@ -1,7 +1,7 @@
 # Design: desktop app for Mac and Windows with local transcription
 
 - **Issue:** owner request, 2026-11-06 and 2026-11-10; PRD change in `lzno-labs/empresa` (minuteca, "App de escritorio")
-- **Status:** Proposed
+- **Status:** In progress: phase 1 done; phases 2 and 3 (app and installers) started on 2026-11-11 at the owner's request, in parallel with the real-meeting test
 - **Author:** founding agent (claude)
 - **Touches:** data (meeting audio on the computer), security (desktop sign-in, model downloads), AI (local models)
 

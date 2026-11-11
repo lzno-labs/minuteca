@@ -266,6 +266,16 @@ export class Store {
       },
     ]);
   }
+  /** A transcript from the desktop app: replaces any earlier one, and voice names start over. */
+  async finishLocal(id: string, t: Transcript) {
+    await this.db.batch([
+      { sql: "INSERT INTO transcripts (meeting_id, body) VALUES (?, ?) ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body", params: [id, JSON.stringify(t)] },
+      {
+        sql: "UPDATE meetings SET status = 'done', error = NULL, provider = 'local', key_source = NULL, duration = ?, language = ?, speaker_names = '{}', job_id = NULL, job_token_hash = NULL WHERE id = ? AND status IN ('uploaded', 'error', 'done')",
+        params: [t.duration, t.language, id],
+      },
+    ]);
+  }
   async failMeeting(id: string, error: string) {
     await this.db.run("UPDATE meetings SET status = 'error', error = ?, job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')", [error, id]);
   }

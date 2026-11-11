@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Loader2, Mail, Mic } from "lucide-react";
 import { api } from "../lib/api";
+import { desktopBridge } from "../lib/desktop";
 import { useI18n } from "../i18n";
 import LanguageSwitch from "./LanguageSwitch";
 
@@ -30,7 +31,10 @@ export default function LoginScreen() {
     setState("sending");
     setError(null);
     try {
-      await api("/auth/link", { method: "POST", body: { email: email.trim() } });
+      // In the desktop app the app itself asks for the link, with its own secret (ADR 0003 and 0005).
+      const bridge = desktopBridge();
+      if (bridge) await bridge.requestLink(email.trim());
+      else await api("/auth/link", { method: "POST", body: { email: email.trim() } });
       setState("sent");
     } catch (err) {
       setError(err.message);
@@ -81,13 +85,16 @@ export default function LoginScreen() {
 /**
  * /acceso?t=…: the page the email link opens. Mail scanners open links on their own, so the
  * session starts only when the person taps the button. Links asked by the iOS recorder
- * (&app=1) open the recorder instead, which finishes the sign-in with its own secret.
+ * (&app=1) open the recorder instead, and those asked by the desktop app (&app=desktop) open that
+ * app; each finishes the sign-in with its own secret.
  */
 export function AccessScreen() {
   const { t } = useI18n();
   const params = new URLSearchParams(window.location.search);
   const token = params.get("t") || "";
-  const forApp = params.get("app") === "1";
+  const app = params.get("app");
+  const forApp = app === "1" || app === "desktop";
+  const words = app === "desktop" ? { hint: "access.desktopHint", open: "access.openDesktop", only: "access.desktopOnlyHere" } : { hint: "access.appHint", open: "access.openApp", only: "access.appOnlyHere" };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -108,14 +115,14 @@ export function AccessScreen() {
       <h1 className="text-2xl font-bold tracking-tight">minuteca</h1>
       {forApp ? (
         <>
-          <p className="mt-2 text-sm text-slate-600">{t("access.appHint")}</p>
+          <p className="mt-2 text-sm text-slate-600">{t(words.hint)}</p>
           <a
             href={`minuteca://acceso?t=${encodeURIComponent(token)}`}
             className="mt-6 flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
           >
-            {t("access.openApp")}
+            {t(words.open)}
           </a>
-          <p className="mt-3 text-xs text-slate-500">{t("access.appOnlyHere")}</p>
+          <p className="mt-3 text-xs text-slate-500">{t(words.only)}</p>
         </>
       ) : (
         <>

@@ -1,14 +1,27 @@
 {
   "name": "minuteca-desktop",
-  "version": "0.0.0",
+  "productName": "minuteca",
+  "version": "0.1.0",
   "private": true,
-  "description": "minuteca for Mac and Windows: local transcription engine (phase 1, docs/design/desktop-app.md)",
+  "description": "minuteca for Mac and Windows: the web app plus transcription on the computer",
+  "author": "Lzno",
   "license": "AGPL-3.0-only",
   "type": "module",
+  "main": "dist/main.cjs",
   "engines": {
     "node": ">=22.18"
   },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "dist": "node build.mjs && electron-builder --publish never"
+  },
   "dependencies": {
     "sherpa-onnx-node": "2.0.1"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "26.18.1",
+    "esbuild": "0.28.2"
   }
 }

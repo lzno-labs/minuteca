@@ -164,9 +164,11 @@ export function createApp(deps: Deps) {
   };
 
   app.post("/api/auth/link", async (c) => {
-    const b = await body<{ email: string; client: string; challenge: string }>(c);
+    const b = await body<{ email: string; client: string; challenge: string; device: string }>(c);
     const email = String(b.email ?? "").trim().toLowerCase();
     const client = b.client === "app" ? "app" : "web";
+    // Apps: the iPhone recorder, or the desktop app (ADR 0005). Same flow, other words in the mail and page.
+    const desktop = client === "app" && b.device === "desktop";
     if (!EMAIL_RE.test(email)) return err(c, 400, "invalid_email");
     if (client === "web" && !sameOrigin(c)) return err(c, 403, "bad_origin");
     const challenge = client === "app" ? String(b.challenge ?? "") : null;
@@ -177,13 +179,13 @@ export function createApp(deps: Deps) {
     if (await canSignIn(email)) {
       const token = randomToken();
       await store.addLoginToken(await sha256Hex(token), email, client, challenge, deps.now() + LOGIN_MINUTES * MINUTE);
-      const link = `${config.origin}/acceso?t=${token}${client === "app" ? "&app=1" : ""}`;
+      const link = `${config.origin}/acceso?t=${token}${desktop ? "&app=desktop" : client === "app" ? "&app=1" : ""}`;
       const lang = c.get("lang");
       try {
         await deps.mail.send({
           to: email,
           subject: t(lang, "mail.signIn.subject"),
-          text: t(lang, client === "app" ? "mail.signIn.bodyApp" : "mail.signIn.body", { link, minutes: LOGIN_MINUTES }),
+          text: t(lang, desktop ? "mail.signIn.bodyDesktop" : client === "app" ? "mail.signIn.bodyApp" : "mail.signIn.body", { link, minutes: LOGIN_MINUTES }),
         });
       } catch (e) {
         console.error("mail", (e as Error).message);
@@ -554,6 +556,23 @@ export function createApp(deps: Deps) {
     const t = (await body<{ transcript: unknown }>(c)).transcript;
     if (!isTranscript(t) || t.provider !== m.provider || t.blocks.length > 50_000) return err(c, 400, "invalid_transcript");
     await finishTranscript(tdeps, m, t);
+    return c.json(meetingJson((await ownMeeting(c))!));
+  });
+
+  /**
+   * A transcript made on the person's computer by the desktop app (ADR 0005). Nothing is paid or sent
+   * to a provider, so no permission or key applies; the audio must be here and no cloud job running.
+   */
+  authed.put("/meetings/:id/transcript/local", async (c) => {
+    const m = await ownMeeting(c);
+    if (!m) return err(c, 404, "not_found");
+    if (!m.audio_key || !["uploaded", "error", "done"].includes(m.status)) return err(c, 409, "not_ready");
+    if (Number(c.req.header("Content-Length") ?? 0) > MAX_TRANSCRIPT_BYTES) return err(c, 413, "too_large");
+    const t = (await body<{ transcript: unknown }>(c)).transcript;
+    if (!isTranscript(t) || (t.provider as string) !== "local" || t.blocks.length > 50_000 || (!t.blocks.length && !t.duration)) {
+      return err(c, 400, "invalid_transcript");
+    }
+    await store.finishLocal(m.id, t);
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 

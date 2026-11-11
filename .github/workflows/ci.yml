@@ -31,6 +31,24 @@ jobs:
       - name: Build the web app
         run: npm run build
 
+  desktop:
+    # Types and bundle of the desktop app (desktop/, ADR 0005). Installers: desktop.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: npx tsc -p desktop/tsconfig.json
+      - run: node build.mjs
+        working-directory: desktop
+
   ios-logic:
     # MinutecaKit is Foundation only, so it builds and tests on Linux for free on every PR.
     # ubuntu-latest no longer ships Swift, so the job runs in the official Swift image.

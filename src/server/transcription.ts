@@ -1,6 +1,6 @@
 /**
- * Transcription jobs, and the one place where money is spent on AI (AGENTS.md section 5 of the
- * Lzno company: every AI call goes through a single function that counts and stops at the cap).
+ * Transcription jobs, and the one place where money is spent on AI: every AI call goes through a
+ * single function that counts and stops at the cap.
  *
  * startTranscription() is that function. It checks consent, picks the key (the person's own,
  * or the hosted keys within the monthly cap), books the expected minutes in the usage ledger

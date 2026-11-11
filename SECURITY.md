@@ -10,8 +10,8 @@ Include what you found, how to reproduce it, and the impact you expect. We will 
 
 ## Scope
 
-The server and web app (`src/`), the iOS recorder (`ios/`) and the hosted version at `minuteca.lzno.app`. Please do not access other people's data, degrade the service, spend other people's provider credit or run automated scans against the hosted version.
+The server and web app (`src/`), the iOS recorder (`ios/`), the desktop app (`desktop/`) and the hosted version at `minuteca.lzno.app`. Please do not access other people's data, degrade the service, spend other people's provider credit or run automated scans against the hosted version.
 
 ## Supported versions
 
-Only the latest commit on `main` and the current TestFlight build.
+Only the latest commit on `main`, the current TestFlight build and the latest desktop release.

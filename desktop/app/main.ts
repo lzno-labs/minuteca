@@ -234,7 +234,7 @@ const canInstall = process.platform !== "darwin" || __MAC_SIGNED__;
 let prompted = "";
 let promptAfterJob = false;
 
-// Spanish unless the computer asks for English (AGENTS.md §10); texts live with the web's.
+// Spanish, the app's main language, unless the computer asks for English; texts live with the web's.
 const words = () => (app.getLocale().toLowerCase().startsWith("en") ? en : es).desktopApp;
 const fill = (text: string, version = "") => text.replace("{version}", version);
 

@@ -4,7 +4,6 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { Config } from "./config.ts";
 import { challengeMatches, randomToken, sha256Hex, TOKEN_RE } from "./crypto.ts";
 import { audioKey, parseRange, rawKey, type FileRange, type Files, type StoredFile } from "./files/files.ts";
-import { DOWNLOAD_RE, type Downloads } from "./files/downloads.ts";
 import { pickLanguage, t } from "./i18n.ts";
 import { isKeyVendor, plausibleKey, type KeyVault } from "./keys.ts";
 import { isLlmProvider, LLM_PROVIDERS, LlmError, MODEL_RE, type LlmAdapter, type LlmProviderId } from "./llm/llm.ts";
@@ -41,8 +40,6 @@ export interface Deps {
   clientIp: (req: Request) => string;
   /** Static files of the web app (dist/). */
   assets?: (req: Request) => Promise<Response>;
-  /** Desktop installers and update feeds (ADR 0005); absent where none are published. */
-  downloads?: Downloads;
 }
 
 type Env = { Variables: { user: User; lang: string; auth: "cookie" | "bearer" } };
@@ -153,23 +150,11 @@ export function createApp(deps: Deps) {
     c.res.headers.set("Permissions-Policy", "microphone=(self), camera=(), geolocation=()");
     if (!c.res.headers.has("Content-Security-Policy")) c.res.headers.set("Content-Security-Policy", CSP);
     if (secure) c.res.headers.set("Strict-Transport-Security", "max-age=31536000");
-    // API answers are never cached, unless a route says otherwise (desktop installers, audio).
+    // API answers are never cached, unless a route says otherwise (audio).
     if (c.req.path.startsWith("/api/") && !c.res.headers.has("Cache-Control")) c.res.headers.set("Cache-Control", "no-store");
   });
 
   app.get("/health", (c) => c.json({ ok: true, core: config.coreSha }));
-
-  /** Desktop installers and update feeds (ADR 0005): public, like any download page. */
-  app.get("/api/desktop/:file", (c) => {
-    const name = c.req.param("file") ?? "";
-    if (!deps.downloads || !DOWNLOAD_RE.test(name)) return err(c, 404, "not_found");
-    const feed = name.endsWith(".yml");
-    return sendFile(c, (range) => deps.downloads!.get(name, range), {
-      // Feeds change with each release; installers never change under the same name.
-      "Cache-Control": feed ? "no-cache" : "public, max-age=86400",
-      ...(feed ? {} : { "Content-Disposition": `attachment; filename="${name}"` }),
-    });
-  });
 
   /* ---------- sign in (docs/adr/0003-access.md) ---------- */
 
@@ -739,7 +724,7 @@ export async function autoTranscribe(tdeps: TranscriptionDeps, userId: string, m
  * space every few seconds (JSON allows leading whitespace) and then the JSON; an error then carries
  * its real status in `errorStatus`, which the web client turns back into an error.
  */
-/** A stored file with byte ranges (players and the desktop updater ask for parts). */
+/** A stored file with byte ranges (audio players ask for parts). */
 export async function sendFile(c: { req: { header(name: string): string | undefined }; json(body: unknown, status?: number): Response }, get: (range?: FileRange) => Promise<StoredFile | null>, extra: Record<string, string>): Promise<Response> {
   const head = await get({ offset: 0, length: 1 });
   if (!head) return c.json({ error: "not_found" }, 404);

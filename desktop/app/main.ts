@@ -225,7 +225,7 @@ ipcMain.on("desktop:cancel", (e) => {
   job.worker.kill();
 });
 
-/* ---------- updates: the server publishes the feeds at /api/desktop (ADR 0005) ---------- */
+/* ---------- updates: GitHub releases of the open core (ADR 0005), set by electron-builder.yml ---------- */
 
 type UpdateState = { status: "dev" | "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error"; version?: string };
 let update: UpdateState = { status: app.isPackaged ? "idle" : "dev" };
@@ -273,7 +273,6 @@ async function checkUpdates(): Promise<UpdateState> {
 
 function setupUpdates() {
   if (!app.isPackaged) return;
-  autoUpdater.setFeedURL({ provider: "generic", url: `${ORIGIN}/api/desktop` });
   autoUpdater.autoDownload = canInstall;
   autoUpdater.autoInstallOnAppQuit = canInstall;
   autoUpdater.on("checking-for-update", () => setUpdate({ status: "checking" }));

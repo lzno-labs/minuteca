@@ -3,7 +3,7 @@
 import { build } from "esbuild";
 import { copyFileSync, mkdirSync } from "node:fs";
 
-// MINUTECA_MAC_SIGNED=1 only in the release workflow that signs with a Developer ID (lzno-labs/empresa).
+// MINUTECA_MAC_SIGNED=1 only for builds signed with a Developer ID (none yet; see the README).
 const signed = process.env.MINUTECA_MAC_SIGNED === "1";
 const common = { bundle: true, platform: "node", format: "cjs", target: "node22", sourcemap: false, logLevel: "warning", external: ["electron", "sherpa-onnx-node", "electron-updater"], define: { __MAC_SIGNED__: String(signed) } };
 mkdirSync("dist", { recursive: true });

@@ -26,11 +26,8 @@ export function progressText(p) {
   }
 }
 
-/** The version in an electron-builder feed (latest.yml, latest-mac.yml), or null. */
-export function feedVersion(yml) {
-  const m = /^version:\s*['"]?([0-9]+\.[0-9]+\.[0-9]+)['"]?\s*$/m.exec(yml || "");
-  return m ? m[1] : null;
-}
+/** Where the desktop app is published: GitHub Releases of the open core (docs/adr/0005). */
+export const RELEASES = "https://github.com/lzno-labs/minuteca/releases";
 
 /** Which installer to offer first, from the browser's own description. */
 export function detectOs(userAgent = "") {
@@ -39,6 +36,8 @@ export function detectOs(userAgent = "") {
   return null;
 }
 
-/** Installer names, as desktop/electron-builder.yml writes them. */
-export const installerFile = (version, kind) =>
-  kind === "windows" ? `minuteca-${version}-windows-x64.exe` : `minuteca-${version}-mac-${kind === "mac-intel" ? "x64" : "arm64"}.dmg`;
+/** Installer names, as desktop/electron-builder.yml writes them: the same in every release. */
+export const installerFile = (kind) => (kind === "windows" ? "minuteca-windows-x64.exe" : `minuteca-mac-${kind === "mac-intel" ? "x64" : "arm64"}.dmg`);
+
+/** GitHub sends the newest release's file for this link. */
+export const installerUrl = (kind) => `${RELEASES}/latest/download/${installerFile(kind)}`;

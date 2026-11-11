@@ -505,7 +505,6 @@
   "download": {
     "title": "minuteca for your computer",
     "intro": "The same minuteca in its own window, and it also transcribes on your computer: the audio does not go to any AI provider.",
-    "version": "Version {version}",
     "windows": "Download for Windows",
     "macApple": "Download for Mac with Apple chip",
     "macIntel": "Download for Mac with Intel",
@@ -513,8 +512,8 @@
     "winFirstOpen": "Windows: the first time a blue warning appears: \"More info\", \"Run anyway\".",
     "updates": "After that, the app tells you when there is a new version.",
     "needs": "Needs about 1.5 GB of disk and 8 GB of RAM.",
-    "none": "No version has been published yet.",
-    "back": "Back to minuteca"
+    "back": "Back to minuteca",
+    "allVersions": "All versions and what changed"
   },
   "desktopApp": {
     "title": "Computer app",

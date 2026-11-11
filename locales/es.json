@@ -505,7 +505,6 @@
   "download": {
     "title": "minuteca para tu computadora",
     "intro": "La misma minuteca en su propia ventana, y además transcribe en tu computadora: el audio no sale hacia ningún proveedor de IA.",
-    "version": "Versión {version}",
     "windows": "Descargar para Windows",
     "macApple": "Descargar para Mac con chip de Apple",
     "macIntel": "Descargar para Mac con Intel",
@@ -513,8 +512,8 @@
     "winFirstOpen": "Windows: la primera vez aparece un aviso azul: «Más información», «Ejecutar de todas formas».",
     "updates": "Después, la app te avisa cuando hay una versión nueva.",
     "needs": "Necesita unos 1,5 GB de disco y 8 GB de RAM.",
-    "none": "Todavía no hay una versión publicada.",
-    "back": "Volver a minuteca"
+    "back": "Volver a minuteca",
+    "allVersions": "Todas las versiones y sus cambios"
   },
   "desktopApp": {
     "title": "App para computadora",

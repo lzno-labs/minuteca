@@ -85,7 +85,7 @@ export function fakeTranscriber(provider: Provider, opts: { result?: () => JobRe
   return t;
 }
 
-export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys | null; transcribers?: Partial<Record<Provider, Transcriber>>; llm?: Partial<Record<LlmProviderId, LlmAdapter>>; now?: () => number; downloads?: Deps["downloads"] } = {}) {
+export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys | null; transcribers?: Partial<Record<Provider, Transcriber>>; llm?: Partial<Record<LlmProviderId, LlmAdapter>>; now?: () => number } = {}) {
   const db = openSqlite(":memory:");
   const dir = mkdtempSync(join(tmpdir(), "minuteca-test-"));
   const mails: MailMessage[] = [];
@@ -113,7 +113,6 @@ export function setup(over: { env?: Record<string, string>; hosted?: HostedKeys 
     clientIp: () => "127.0.0.1",
     // Like Workers' ASSETS binding: fetch() responses have immutable headers.
     assets: () => fetch("data:text/html,<!doctype html><title>minuteca</title>"),
-    downloads: over.downloads,
   };
   const ready = migrate(db);
   const app = createApp(deps);

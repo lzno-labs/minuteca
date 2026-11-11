@@ -561,17 +561,21 @@ export function createApp(deps: Deps) {
 
   const llmRoute = async (c: C, fn: () => Promise<Response>) => {
     if (!(await deps.limits.llm.allow(`llm:${c.get("user").id}`))) return err(c, 429, "too_many");
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof MinutesError) return err(c, e.status, e.code);
-      if (e instanceof LlmError) {
-        // Provider, HTTP status and the provider's error code only (see LlmError).
-        console.error("llm", e.code, e.message);
-        return err(c, 502, `llm_${e.code}`);
+    const work = (async () => {
+      try {
+        return await fn();
+      } catch (e) {
+        if (e instanceof MinutesError) return err(c, e.status, e.code);
+        if (e instanceof LlmError) {
+          // Provider, HTTP status and the provider's error code only (see LlmError).
+          console.error("llm", e.code, e.message);
+          return err(c, 502, `llm_${e.code}`);
+        }
+        console.error("llm route", (e as Error).message);
+        return err(c, 500, "generic");
       }
-      throw e;
-    }
+    })();
+    return keepAlive(work);
   };
 
   authed.post("/meetings/:id/speakers/suggest", (c) =>
@@ -710,6 +714,42 @@ export async function autoTranscribe(tdeps: TranscriptionDeps, userId: string, m
 }
 
 /** Retention (meetings, audio and transcripts after retentionDays), expired sign-in rows and stuck jobs. */
+/**
+ * Cloudflare closes a response that sends nothing for about 100 seconds, and minutes for a long meeting
+ * can take longer. A quick answer goes out as is. A slow one starts at once with status 200, sends a
+ * space every few seconds (JSON allows leading whitespace) and then the JSON; an error then carries
+ * its real status in `errorStatus`, which the web client turns back into an error.
+ */
+export async function keepAlive(work: Promise<Response>, { after = 5_000, every = 15_000 } = {}): Promise<Response> {
+  let wait: ReturnType<typeof setTimeout> | undefined;
+  const quick = await Promise.race([work, new Promise<null>((resolve) => (wait = setTimeout(() => resolve(null), after)))]);
+  clearTimeout(wait);
+  if (quick) return quick;
+  const encoder = new TextEncoder();
+  let tick: ReturnType<typeof setInterval> | undefined;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(" "));
+      tick = setInterval(() => controller.enqueue(encoder.encode(" ")), every);
+      work
+        .then(async (res) => {
+          const data = (await res.json().catch(() => ({ error: "generic" }))) as Record<string, unknown>;
+          return res.ok ? data : { ...data, errorStatus: res.status };
+        })
+        .catch(() => ({ error: "generic", errorStatus: 500 }))
+        .then((data) => {
+          clearInterval(tick);
+          controller.enqueue(encoder.encode(JSON.stringify(data)));
+          controller.close();
+        });
+    },
+    cancel() {
+      clearInterval(tick);
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 export async function maintenance(deps: Deps): Promise<{ deleted: number }> {
   const now = deps.now();
   let deleted = 0;

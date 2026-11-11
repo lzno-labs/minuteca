@@ -31,7 +31,8 @@ export async function api(path, { method = "GET", body, signal } = {}) {
     throw new ApiError("network", 0);
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error || "generic", res.status);
+  // Slow answers (language models) arrive as 200 with the error's real status in errorStatus.
+  if (!res.ok || data.errorStatus) throw new ApiError(data.error || "generic", data.errorStatus || res.status);
   return data;
 }
 

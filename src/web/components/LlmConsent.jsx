@@ -5,8 +5,8 @@ import { useI18n } from "../i18n";
 import Dialog from "./Dialog";
 
 /**
- * Asks once per provider before a transcript is sent to a language model (AGENTS: nothing about a
- * person leaves towards an AI without explicit permission). The server refuses without it too.
+ * Asks once per provider before a transcript is sent to a language model: nothing about a person
+ * leaves towards an AI without explicit permission. The server refuses without it too.
  * const { ensure, dialog } = useLlmConsent(me, onMeChange); if (await ensure()) ...
  */
 export function useLlmConsent(me, onMeChange) {

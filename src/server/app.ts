@@ -313,7 +313,7 @@ export function createApp(deps: Deps) {
     return c.json({ ok: true });
   });
 
-  /** Permission to send audio to a provider (AGENTS: nothing leaves towards an AI without it). */
+  /** Permission to send audio to a provider: nothing leaves towards an AI without it. */
   authed.put("/me/consents", async (c) => {
     const b = await body<{ provider: string; granted: boolean }>(c);
     if (!isConsentId(b.provider)) return err(c, 400, "invalid_provider");
@@ -606,7 +606,7 @@ export function createApp(deps: Deps) {
     return c.json({ ok: true });
   });
 
-  /* ---------- export everything (AGENTS: data leaves in an open format) ---------- */
+  /* ---------- export everything: a person's data leaves in an open format ---------- */
 
   authed.get("/export", async (c) => {
     const user = c.get("user");

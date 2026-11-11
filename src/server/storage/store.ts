@@ -23,6 +23,37 @@ export interface User {
 export const isConsentId = (c: unknown): c is string =>
   isProvider(c) || (typeof c === "string" && c.startsWith("llm:") && isLlmProvider(c.slice(4)));
 
+/** Earlier transcripts kept per meeting when it is transcribed again (they can be large). */
+export const MAX_TRANSCRIPT_VERSIONS = 5;
+
+export interface TranscriptVersionRow {
+  id: number;
+  provider: string | null;
+  model: string | null;
+  speaker_names: string;
+  duration: number;
+  archived_at: number;
+}
+
+/**
+ * Statements that move a meeting's current transcript, with its voice names, into its versions
+ * (only while the meeting is in one of `statuses`), keeping the newest MAX_TRANSCRIPT_VERSIONS.
+ */
+function archiveTranscript(id: string, now: number, statuses: string[]) {
+  return [
+    {
+      sql: `INSERT INTO transcript_versions (meeting_id, body, provider, model, speaker_names, duration, language, archived_at)
+            SELECT t.meeting_id, t.body, json_extract(t.body, '$.provider'), json_extract(t.body, '$.model'), m.speaker_names, m.duration, m.language, ?
+            FROM transcripts t JOIN meetings m ON m.id = t.meeting_id WHERE t.meeting_id = ? AND m.status IN (${statuses.map(() => "?").join(", ")})`,
+      params: [now, id, ...statuses],
+    },
+    {
+      sql: "DELETE FROM transcript_versions WHERE meeting_id = ? AND id NOT IN (SELECT id FROM transcript_versions WHERE meeting_id = ? ORDER BY archived_at DESC, id DESC LIMIT ?)",
+      params: [id, id, MAX_TRANSCRIPT_VERSIONS],
+    },
+  ];
+}
+
 /** Versions of a meeting's minutes kept, so people can compare language models. */
 export const MAX_MINUTES_VERSIONS = 10;
 
@@ -213,6 +244,7 @@ export class Store {
     await this.db.batch([
       { sql: "DELETE FROM transcripts WHERE meeting_id IN (SELECT id FROM meetings WHERE id = ? AND user_id = ?)", params: [id, userId] },
       { sql: "DELETE FROM minutes WHERE meeting_id IN (SELECT id FROM meetings WHERE id = ? AND user_id = ?)", params: [id, userId] },
+      { sql: "DELETE FROM transcript_versions WHERE meeting_id IN (SELECT id FROM meetings WHERE id = ? AND user_id = ?)", params: [id, userId] },
       { sql: "DELETE FROM meetings WHERE id = ? AND user_id = ?", params: [id, userId] },
     ]);
   }
@@ -243,10 +275,11 @@ export class Store {
   /* ---------- jobs ---------- */
 
   /** Moves a meeting to 'transcribing' only from 'uploaded' or 'error', so two clicks never pay twice. */
-  async claimForTranscription(userId: string, id: string, provider: Provider, keySource: KeySource, tokenHash: string, language: string | null, now: number) {
+  /** again: a meeting already transcribed may start over; its transcript is kept until the new one arrives. */
+  async claimForTranscription(userId: string, id: string, provider: Provider, keySource: KeySource, tokenHash: string, language: string | null, now: number, again = false) {
     const { changes } = await this.db.run(
       `UPDATE meetings SET status = 'transcribing', error = NULL, provider = ?, key_source = ?, job_id = NULL, job_token_hash = ?, job_started_at = ?, language = ?
-       WHERE id = ? AND user_id = ? AND status IN ('uploaded', 'error') AND audio_key IS NOT NULL`,
+       WHERE id = ? AND user_id = ? AND status IN ('uploaded', 'error'${again ? ", 'done'" : ""}) AND audio_key IS NOT NULL`,
       [provider, keySource, tokenHash, now, language, id, userId],
     );
     return changes > 0;
@@ -261,18 +294,21 @@ export class Store {
   async setUsageId(id: string, usageId: number) {
     await this.db.run("UPDATE meetings SET usage_id = ? WHERE id = ?", [usageId, id]);
   }
-  async finishMeeting(id: string, t: Transcript) {
+  /** A provider's transcript: an earlier one goes to the versions, and voice names start over. */
+  async finishMeeting(id: string, t: Transcript, now: number) {
     await this.db.batch([
+      ...archiveTranscript(id, now, ["transcribing", "converting"]),
       { sql: "INSERT INTO transcripts (meeting_id, body) VALUES (?, ?) ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body", params: [id, JSON.stringify(t)] },
       {
-        sql: "UPDATE meetings SET status = 'done', error = NULL, duration = ?, language = ?, job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')",
+        sql: "UPDATE meetings SET status = 'done', error = NULL, duration = ?, language = ?, speaker_names = '{}', job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')",
         params: [t.duration, t.language, id],
       },
     ]);
   }
-  /** A transcript from the desktop app: replaces any earlier one, and voice names start over. */
-  async finishLocal(id: string, t: Transcript) {
+  /** A transcript from the desktop app: an earlier one goes to the versions, and voice names start over. */
+  async finishLocal(id: string, t: Transcript, now: number) {
     await this.db.batch([
+      ...archiveTranscript(id, now, ["uploaded", "error", "done"]),
       { sql: "INSERT INTO transcripts (meeting_id, body) VALUES (?, ?) ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body", params: [id, JSON.stringify(t)] },
       {
         sql: "UPDATE meetings SET status = 'done', error = NULL, provider = 'local', key_source = NULL, duration = ?, language = ?, speaker_names = '{}', job_id = NULL, job_token_hash = NULL WHERE id = ? AND status IN ('uploaded', 'error', 'done')",
@@ -280,8 +316,55 @@ export class Store {
       },
     ]);
   }
+  /** A failed transcription; a meeting that had a transcript keeps it (and its provider), with the error noted. */
   async failMeeting(id: string, error: string) {
-    await this.db.run("UPDATE meetings SET status = 'error', error = ?, job_token_hash = NULL WHERE id = ? AND status IN ('transcribing', 'converting')", [error, id]);
+    await this.db.run(
+      `UPDATE meetings SET
+         status = CASE WHEN EXISTS (SELECT 1 FROM transcripts WHERE meeting_id = meetings.id) THEN 'done' ELSE 'error' END,
+         provider = COALESCE((SELECT json_extract(body, '$.provider') FROM transcripts WHERE meeting_id = meetings.id), provider),
+         error = ?, job_token_hash = NULL
+       WHERE id = ? AND status IN ('transcribing', 'converting')`,
+      [error, id],
+    );
+  }
+
+  /* ---------- earlier transcripts ---------- */
+
+  async transcriptVersions(meetingId: string) {
+    return this.db.all<TranscriptVersionRow>(
+      "SELECT id, provider, model, speaker_names, duration, archived_at FROM transcript_versions WHERE meeting_id = ? ORDER BY archived_at DESC, id DESC",
+      [meetingId],
+    );
+  }
+  async transcriptVersionsText(meetingId: string): Promise<string[]> {
+    return (await this.db.all<{ body: string }>("SELECT body FROM transcript_versions WHERE meeting_id = ? ORDER BY archived_at DESC, id DESC", [meetingId])).map((r) => r.body);
+  }
+  /** Swaps an earlier transcript back in; the current one becomes a version. Only for finished meetings. */
+  async useTranscriptVersion(meetingId: string, versionId: number, now: number): Promise<boolean> {
+    const v = await this.db.first<{ id: number }>("SELECT id FROM transcript_versions WHERE id = ? AND meeting_id = ?", [versionId, meetingId]);
+    const m = await this.db.first<{ status: string }>("SELECT status FROM meetings WHERE id = ?", [meetingId]);
+    if (!v || m?.status !== "done") return false;
+    const pick = (col: string) => `(SELECT ${col} FROM transcript_versions WHERE id = ${Number(versionId)})`;
+    // Archive first, prune last: pruning before the copy could drop the very version being used.
+    const [archive, prune] = archiveTranscript(meetingId, now, ["done"]);
+    await this.db.batch([
+      archive!,
+      {
+        sql: "INSERT INTO transcripts (meeting_id, body) SELECT meeting_id, body FROM transcript_versions WHERE id = ? AND meeting_id = ? ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body",
+        params: [versionId, meetingId],
+      },
+      {
+        sql: `UPDATE meetings SET provider = ${pick("provider")}, speaker_names = ${pick("speaker_names")}, duration = ${pick("duration")}, language = ${pick("language")}, key_source = NULL, error = NULL WHERE id = ? AND status = 'done'`,
+        params: [meetingId],
+      },
+      { sql: "DELETE FROM transcript_versions WHERE id = ? AND meeting_id = ?", params: [versionId, meetingId] },
+      prune!,
+    ]);
+    return true;
+  }
+  async deleteTranscriptVersion(meetingId: string, versionId: number) {
+    const { changes } = await this.db.run("DELETE FROM transcript_versions WHERE id = ? AND meeting_id = ?", [versionId, meetingId]);
+    return changes > 0;
   }
 
   /* ---------- minutes ---------- */

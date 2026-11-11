@@ -14,12 +14,18 @@ import Dialog from "./Dialog";
  * pays before anything leaves. The first time a person uses a provider, it asks for permission
  * (stored on the server, which refuses without it).
  */
-export default function TranscribePanel({ meeting, me, onMeChange, onStarted, onOpenSettings, settings }) {
+export default function TranscribePanel({ meeting, me, onMeChange, onStarted, onOpenSettings, settings, again = false, onCancel }) {
   const { t } = useI18n();
   // In the desktop app, transcribing on the computer comes first (ADR 0005).
   const bridge = desktopBridge();
   const ids = bridge ? ["local", ...PROVIDER_IDS] : PROVIDER_IDS;
-  const [provider, setProvider] = useState(() => (bridge ? "local" : usableProvider(me) ?? me?.provider ?? "deepgram"));
+  const [provider, setProvider] = useState(() => {
+    if (bridge && (!again || meeting.provider !== "local")) return "local";
+    // Transcribing again: start with a provider other than the current one, to compare.
+    const usable = PROVIDER_IDS.filter((id) => keySource(me, id));
+    if (again) return usable.find((id) => id !== meeting.provider) ?? usable[0] ?? "deepgram";
+    return usableProvider(me) ?? me?.provider ?? "deepgram";
+  });
   const [language, setLanguage] = useState(settings?.language ?? "es");
   const [options, setOptions] = useState(false);
   const [asking, setAsking] = useState(false);
@@ -35,7 +41,7 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
     setBusy(true);
     setError(null);
     try {
-      await startTranscription(meeting.id, { provider, language: provider !== "deepgram" && language === "multi" ? "" : language });
+      await startTranscription(meeting.id, { provider, language: provider !== "deepgram" && language === "multi" ? "" : language, again });
       onStarted?.();
     } catch (err) {
       setError(err.message);
@@ -126,17 +132,38 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
         >
           {meeting.status === "error" ? <AlertTriangle className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </span>
-        <div>
-          <h2 className="font-semibold text-slate-900">{meeting.status === "error" ? t("transcribe.retryTitle") : t("transcribe.ready")}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-slate-900">{again ? t("transcribe.againTitle") : meeting.status === "error" ? t("transcribe.retryTitle") : t("transcribe.ready")}</h2>
           <p className="text-sm text-slate-600" role={meeting.status === "error" ? "alert" : undefined}>
-            {meeting.status === "error"
+            {again
+              ? t("transcribe.againHint")
+              : meeting.status === "error"
               ? t("transcribe.failed", { reason: t(`errors.${meeting.error}`) })
               : meeting.duration
                 ? t("transcribe.readyHint", { duration: formatDuration(meeting.duration) })
                 : t("transcribe.readyHintNoLength")}
           </p>
         </div>
+        {again && (
+          <button type="button" onClick={onCancel} className="shrink-0 rounded-lg px-2.5 py-1.5 text-sm text-slate-600 hover:bg-slate-100">
+            {t("common.cancel")}
+          </button>
+        )}
       </div>
+
+      {ids.length > 1 && (
+        <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+          <span>{t("transcribe.with")}</span>
+          <select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={busy} className="rounded-lg border border-slate-300 bg-surface py-1.5 pl-2 pr-7 text-sm font-medium text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+            {ids.map((id) => (
+              <option key={id} value={id}>
+                {t(`providers.${id}.name`)}
+                {id === "local" || keySource(me, id) ? "" : ` (${t("transcribe.noKeyShort")})`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {local ? (
         <>
@@ -179,43 +206,32 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
         </div>
       )}
 
-      <div>
-        <button
-          type="button"
-          onClick={() => setOptions((o) => !o)}
-          aria-expanded={options}
-          className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
-        >
-          {local ? name : t("transcribe.options", { provider: name, language: languageLabel })}
-          <ChevronDown className={`h-4 w-4 transition ${options ? "rotate-180" : ""}`} />
-        </button>
-        {options && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1 text-sm font-medium text-slate-700">
-              <span>{t("transcribe.provider")}</span>
-              <select value={provider} onChange={(e) => setProvider(e.target.value)} className={select}>
-                {ids.map((id) => (
-                  <option key={id} value={id}>
-                    {t(`providers.${id}.name`)}
+      {/* The local engine detects the language itself; cloud providers can be told. */}
+      {!local && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setOptions((o) => !o)}
+            aria-expanded={options}
+            className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+          >
+            {t("transcribe.languageOption", { language: languageLabel })}
+            <ChevronDown className={`h-4 w-4 transition ${options ? "rotate-180" : ""}`} />
+          </button>
+          {options && (
+            <label className="mt-3 block max-w-xs space-y-1 text-sm font-medium text-slate-700">
+              <span>{t("recorder.audioLanguage")}</span>
+              <select value={language} onChange={(e) => setLanguage(e.target.value)} className={select}>
+                {AUDIO_LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {t(`audioLanguages.${l.key}`)}
                   </option>
                 ))}
               </select>
             </label>
-            {!local && (
-              <label className="space-y-1 text-sm font-medium text-slate-700">
-                <span>{t("recorder.audioLanguage")}</span>
-                <select value={language} onChange={(e) => setLanguage(e.target.value)} className={select}>
-                  {AUDIO_LANGUAGES.map((l) => (
-                    <option key={l.value} value={l.value}>
-                      {t(`audioLanguages.${l.key}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       {error && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       <Dialog

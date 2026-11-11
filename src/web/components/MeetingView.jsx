@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileAudio, Loader2, MoreHorizontal, Smartphone, Trash2 } from "lucide-react";
+import { FileAudio, Loader2, MoreHorizontal, RotateCcw, Smartphone, Trash2 } from "lucide-react";
 import { audioUrl, getAudioBlob, refreshMeetings, removeMeetingAudio, updateMeetingMeta, updateSpeakers, useMeeting } from "../lib/cloud";
 import { convertMeeting } from "../lib/convert";
 import { audioExtension, fileBaseName, formatDuration } from "../lib/format";
@@ -9,6 +9,7 @@ import ExportToolbar from "./ExportToolbar";
 import SpeakerRenamer from "./SpeakerRenamer";
 import TranscriptViewer from "./TranscriptViewer";
 import TranscribePanel from "./TranscribePanel";
+import TranscriptVersions from "./TranscriptVersions";
 import MinutesPanel from "./MinutesPanel";
 import Menu from "./Menu";
 import { useConfirm } from "./Confirm";
@@ -30,6 +31,7 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
   const audioRef = useRef(null);
   const [currentTime, setCurrentTime] = useState(-1);
   const [tab, setTab] = useState(null); // "transcript" | "minutes"; null = minutes if they exist
+  const [again, setAgain] = useState(false); // choosing a provider to transcribe a finished meeting again
 
   const flush = useCallback(() => {
     clearTimeout(timer.current);
@@ -105,6 +107,11 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
   if (!stored) return <p className="p-8 text-center text-slate-500">{t("meeting.notFound")}</p>;
 
   const done = meeting.status === "done";
+  const finishedNow = () => {
+    setAgain(false);
+    reload();
+    refreshMeetings();
+  };
   const date = new Date(meeting.date);
   const expiresIn = meeting.expiresAt ? Math.ceil((meeting.expiresAt.getTime() - Date.now()) / 86_400_000) : null;
 
@@ -164,6 +171,7 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
             label={t("meeting.more")}
             icon={MoreHorizontal}
             items={[
+              { label: t("transcribe.again"), icon: RotateCcw, onClick: () => setAgain(true), hidden: !meeting.hasAudio || !done },
               { label: t("exportBar.audioFile"), icon: FileAudio, onClick: downloadAudio, hidden: !meeting.hasAudio },
               { label: t("exportBar.removeAudio"), icon: Trash2, onClick: removeAudio, hidden: !meeting.hasAudio || !done },
               meeting.hasAudio ? "divider" : null,
@@ -209,6 +217,19 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
       {meeting.status === "created" && <p className="rounded-2xl bg-amber-50 p-5 text-sm text-amber-900">{t("meeting.waitingAudio")}</p>}
       {!done && player}
 
+      {done && again && (
+        <TranscribePanel
+          meeting={meeting}
+          me={me}
+          settings={settings}
+          onMeChange={onMeChange}
+          onOpenSettings={onOpenSettings}
+          again
+          onCancel={() => setAgain(false)}
+          onStarted={finishedNow}
+        />
+      )}
+
       {done && (
         <>
           <div role="tablist" aria-label={t("meeting.views")} className="flex gap-1 rounded-xl bg-slate-100 p-1">
@@ -236,6 +257,7 @@ export default function MeetingView({ meetingId, onDelete, me, onMeChange, onOpe
           ) : (
             <>
               <ExportToolbar meeting={meeting} onDownloadAudio={() => getAudioBlob(meetingId)} />
+              <TranscriptVersions meeting={meeting} onChanged={reload} />
               <SpeakerRenamer
                 meetingId={meetingId}
                 me={me}

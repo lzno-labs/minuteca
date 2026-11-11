@@ -260,7 +260,13 @@
     "readyHint": "{duration} of audio, ready to become text with each speaker's name.",
     "readyHintNoLength": "The audio is ready to become text with each speaker's name.",
     "startWith": "Transcribe with {provider}",
-    "options": "{provider} · {language}"
+    "options": "{provider} · {language}",
+    "with": "With",
+    "noKeyShort": "no key",
+    "languageOption": "Audio language: {language}",
+    "again": "Transcribe again",
+    "againTitle": "Transcribe again",
+    "againHint": "Pick another provider to compare. The current transcript is kept, with its names, and you can go back to it."
   },
   "consent": {
     "title": "Send the audio to {provider}?",
@@ -551,5 +557,17 @@
   "llmChoice": {
     "with": "With",
     "default": "default"
+  },
+  "transcriptVersions": {
+    "title": "Other transcripts of this meeting",
+    "hint": "Kept when you transcribe again, to compare providers. The 5 most recent are kept.",
+    "kept": "Kept on {date}",
+    "local": "This computer",
+    "use": "Use this one",
+    "delete": "Delete this transcript",
+    "deleteTitle": "Delete this transcript?",
+    "deleteBody": "The {provider} transcript is deleted. The current one and the audio stay.",
+    "failed": "The new transcript did not finish: {reason} You still see the previous one.",
+    "current": "Now showing: {provider}"
   }
 }

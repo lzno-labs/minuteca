@@ -260,7 +260,13 @@
     "readyHint": "{duration} de audio, listo para convertirse en texto con el nombre de cada persona.",
     "readyHintNoLength": "El audio está listo para convertirse en texto con el nombre de cada persona.",
     "startWith": "Transcribir con {provider}",
-    "options": "{provider} · {language}"
+    "options": "{provider} · {language}",
+    "with": "Con",
+    "noKeyShort": "sin clave",
+    "languageOption": "Idioma del audio: {language}",
+    "again": "Transcribir de nuevo",
+    "againTitle": "Transcribir de nuevo",
+    "againHint": "Elige otro proveedor para comparar. La transcripción actual se guarda, con sus nombres, y puedes volver a ella."
   },
   "consent": {
     "title": "¿Enviar el audio a {provider}?",
@@ -551,5 +557,17 @@
   "llmChoice": {
     "with": "Con",
     "default": "predeterminado"
+  },
+  "transcriptVersions": {
+    "title": "Otras transcripciones de esta reunión",
+    "hint": "Se guardan cuando transcribes de nuevo, para comparar proveedores. Se conservan las 5 más recientes.",
+    "kept": "Guardada el {date}",
+    "local": "Esta computadora",
+    "use": "Usar esta",
+    "delete": "Borrar esta transcripción",
+    "deleteTitle": "¿Borrar esta transcripción?",
+    "deleteBody": "Se borra la transcripción de {provider}. La actual y el audio se quedan.",
+    "failed": "La nueva transcripción no terminó: {reason} Sigues viendo la anterior.",
+    "current": "Ahora ves: {provider}"
   }
 }

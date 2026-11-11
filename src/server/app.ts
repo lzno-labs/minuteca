@@ -10,7 +10,7 @@ import { isLlmProvider, LLM_PROVIDERS, LlmError, MODEL_RE, type LlmAdapter, type
 import { generateMinutes, MinutesError, modelFor, suggestSpeakers, type MinutesDeps } from "./minutes.ts";
 import type { Limiter } from "./limits.ts";
 import type { Mail } from "./mail/mail.ts";
-import { isConsentId, monthOf, type MeetingRow, type MinutesRow, type Role, type Store, type User } from "./storage/store.ts";
+import { isConsentId, monthOf, type MeetingRow, type MinutesRow, type Role, type Store, type TranscriptVersionRow, type User } from "./storage/store.ts";
 import {
   completeFromCallback,
   finishTranscript,
@@ -57,6 +57,16 @@ const AUDIO_TYPE_RE = /^(audio|video)\/[\w.+-]{1,60}$/;
 const SOURCES = new Set(["web", "import", "ios"]);
 const MAX_INSTRUCTIONS = 2000;
 const MAX_MINUTES = 200_000;
+
+export function transcriptVersionJson(v: TranscriptVersionRow) {
+  let speakerNames: Record<string, string> = {};
+  try {
+    speakerNames = JSON.parse(v.speaker_names) as Record<string, string>;
+  } catch {
+    speakerNames = {};
+  }
+  return { id: v.id, provider: v.provider, model: v.model, speakerNames, duration: v.duration, archivedAt: new Date(v.archived_at).toISOString() };
+}
 
 export function minutesJson(m: MinutesRow | null) {
   return m
@@ -423,7 +433,9 @@ export function createApp(deps: Deps) {
     const transcript = m.status === "done" ? await store.transcriptText(m.id) : null;
     const versions = await store.minutesList(m.id);
     // minutes: the newest version (what most screens show); minutesVersions: all of them, newest first.
-    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson) });
+    // transcriptVersions: earlier transcripts, without their text (it can be large).
+    const transcriptVersions = (await store.transcriptVersions(m.id)).map(transcriptVersionJson);
+    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson), transcriptVersions });
     return new Response(`${head.slice(0, -1)},"transcript":${transcript ?? "null"}}`, { headers: { "Content-Type": "application/json; charset=utf-8" } });
   });
 
@@ -511,13 +523,13 @@ export function createApp(deps: Deps) {
 
   authed.post("/meetings/:id/transcribe", async (c) => {
     const user = c.get("user");
-    const b = await body<{ provider: string; language: string }>(c);
+    const b = await body<{ provider: string; language: string; again: boolean }>(c);
     const provider = b.provider === undefined ? user.provider : b.provider;
     if (!isProvider(provider)) return err(c, 400, "invalid_provider");
     let language = typeof b.language === "string" && LANGUAGE_RE.test(b.language) ? b.language : undefined;
     if (language === "multi" && provider !== "deepgram") language = undefined;
     try {
-      const m = await startTranscription(tdeps, user, c.req.param("id") ?? "", { provider, language });
+      const m = await startTranscription(tdeps, user, c.req.param("id") ?? "", { provider, language, again: b.again === true });
       return c.json(meetingJson(m));
     } catch (e) {
       if (e instanceof TranscriptionError) return err(c, e.status, e.code);
@@ -546,6 +558,22 @@ export function createApp(deps: Deps) {
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
+  /** Brings an earlier transcript back (with its voice names); the current one becomes a version. */
+  authed.post("/meetings/:id/transcripts/:version/use", async (c) => {
+    const m = await ownMeeting(c);
+    const id = Number(c.req.param("version"));
+    if (!m || !Number.isSafeInteger(id) || id <= 0) return err(c, 404, "not_found");
+    if (!(await store.useTranscriptVersion(m.id, id, deps.now()))) return err(c, 404, "not_found");
+    return c.json(meetingJson((await ownMeeting(c))!));
+  });
+
+  authed.delete("/meetings/:id/transcripts/:version", async (c) => {
+    const m = await ownMeeting(c);
+    const id = Number(c.req.param("version"));
+    if (!m || !Number.isSafeInteger(id) || id <= 0 || !(await store.deleteTranscriptVersion(m.id, id))) return err(c, 404, "not_found");
+    return c.json({ ok: true });
+  });
+
   /**
    * A transcript made on the person's computer by the desktop app (ADR 0005). Nothing is paid or sent
    * to a provider, so no permission or key applies; the audio must be here and no cloud job running.
@@ -559,7 +587,7 @@ export function createApp(deps: Deps) {
     if (!isTranscript(t) || (t.provider as string) !== "local" || t.blocks.length > 50_000 || (!t.blocks.length && !t.duration)) {
       return err(c, 400, "invalid_transcript");
     }
-    await store.finishLocal(m.id, t);
+    await store.finishLocal(m.id, t, deps.now());
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
@@ -634,7 +662,8 @@ export function createApp(deps: Deps) {
     for (const m of meetings) {
       const versions = await store.minutesList(m.id);
       const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson) });
-      parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"}}`);
+      const earlier = await store.transcriptVersionsText(m.id);
+      parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"},"earlierTranscripts":[${earlier.join(",")}]}`);
     }
     const data = JSON.stringify({
       format: "minuteca-export",

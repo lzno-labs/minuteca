@@ -76,6 +76,7 @@ export default function LlmSettings({ me, onMeChange }) {
         <Sparkles className="h-4 w-4 text-indigo-600" /> {t("llmSettings.title")}
       </h2>
       <p className="mt-1 text-sm text-slate-600">{t("llmSettings.hint")}</p>
+      <p className="mt-1 text-xs text-slate-500">{t("llmSettings.defaultHint")}</p>
       {error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       <div role="radiogroup" aria-label={t("llmSettings.title")} className="mt-4 space-y-3">
@@ -101,6 +102,7 @@ export default function LlmSettings({ me, onMeChange }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-slate-900">{name}</span>
+                    {chosen && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">{t("llmSettings.default")}</span>}
                     {!p.needsKey ? (
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">{t("llmSettings.noKeyNeeded")}</span>
                     ) : p.ownKey ? (
@@ -120,7 +122,7 @@ export default function LlmSettings({ me, onMeChange }) {
                     {t(`llmProviders.${id}.where`)} · {t(`llmProviders.${id}.privacy`)}
                   </p>
 
-                  {chosen && (
+                  {(chosen || !p.needsKey || p.ownKey) && (
                     <label className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>{t("llmSettings.model")}</span>
                       <input

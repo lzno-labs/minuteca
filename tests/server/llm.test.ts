@@ -153,7 +153,9 @@ describe("prompt helpers", () => {
     expect(firstJsonObject('```json\n{"speakers": []}\n```')).toEqual({ speakers: [] });
     expect(firstJsonObject("sin json")).toBeNull();
     const ok = parseSuggestions({ speakers: [{ speaker: 1, name: " Marco ", evidence: "x" }, { speaker: 1, name: "Otro" }, { speaker: "2", name: "Ana" }, { speaker: 9, name: "Z" }] }, new Set([0, 1, 2]));
-    expect(ok).toEqual([{ speaker: 1, name: "Marco", evidence: "x" }, { speaker: 2, name: "Ana", evidence: "" }]);
+    expect(ok).toEqual([{ speaker: 1, name: "Marco", evidence: "x", confidence: "low" }, { speaker: 2, name: "Ana", evidence: "", confidence: "low" }]);
+    const rated = parseSuggestions({ speakers: [{ speaker: 0, name: "A", confidence: "alta" }, { speaker: 1, name: "B", confidence: "medium" }, { speaker: 2, name: "C", confidence: "?" }] }, new Set([0, 1, 2]));
+    expect(rated.map((s) => s.confidence)).toEqual(["high", "medium", "low"]);
   });
 });
 

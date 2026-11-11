@@ -60,7 +60,7 @@ const MAX_MINUTES = 200_000;
 
 export function minutesJson(m: MinutesRow | null) {
   return m
-    ? { body: m.body, provider: m.provider, model: m.model, edited: Boolean(m.edited), createdAt: new Date(m.created_at).toISOString(), updatedAt: new Date(m.updated_at).toISOString() }
+    ? { id: m.id, body: m.body, provider: m.provider, model: m.model, edited: Boolean(m.edited), createdAt: new Date(m.created_at).toISOString(), updatedAt: new Date(m.updated_at).toISOString() }
     : null;
 }
 /** D1 stores values of up to 2 MB; a 6 hour meeting is about 1 MB in our format. */
@@ -421,7 +421,9 @@ export function createApp(deps: Deps) {
     }
     // The transcript goes out as stored, without parsing it again (CPU-limited hosts).
     const transcript = m.status === "done" ? await store.transcriptText(m.id) : null;
-    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(await store.minutes(m.id)) });
+    const versions = await store.minutesList(m.id);
+    // minutes: the newest version (what most screens show); minutesVersions: all of them, newest first.
+    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson) });
     return new Response(`${head.slice(0, -1)},"transcript":${transcript ?? "null"}}`, { headers: { "Content-Type": "application/json; charset=utf-8" } });
   });
 
@@ -582,23 +584,39 @@ export function createApp(deps: Deps) {
     return keepAlive(work);
   };
 
-  authed.post("/meetings/:id/speakers/suggest", (c) =>
-    llmRoute(c, async () => c.json(await suggestSpeakers(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang")))),
-  );
+  // { provider } picks a configured model other than the default for this one generation.
+  authed.post("/meetings/:id/speakers/suggest", async (c) => {
+    const { provider } = await body<{ provider: unknown }>(c);
+    return llmRoute(c, async () => c.json(await suggestSpeakers(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang"), provider)));
+  });
 
-  authed.post("/meetings/:id/minutes", (c) =>
-    llmRoute(c, async () => c.json(minutesJson(await generateMinutes(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang"))))),
-  );
+  authed.post("/meetings/:id/minutes", async (c) => {
+    const { provider } = await body<{ provider: unknown }>(c);
+    return llmRoute(c, async () => c.json(minutesJson(await generateMinutes(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang"), provider))));
+  });
 
+  const versionId = (v: unknown) => (Number.isSafeInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+  /** Edits one version ({ id }), or the newest when no id is given. */
   authed.put("/meetings/:id/minutes", async (c) => {
     const m = await ownMeeting(c);
     if (!m) return err(c, 404, "not_found");
-    const text = (await body<{ body: string }>(c)).body;
-    if (typeof text !== "string" || !text.trim() || text.length > MAX_MINUTES) return err(c, 400, "invalid_minutes");
-    if (!(await store.editMinutes(m.id, text, deps.now()))) return err(c, 404, "not_found");
-    return c.json(minutesJson(await store.minutes(m.id)));
+    const b = await body<{ body: string; id: unknown }>(c);
+    if (typeof b.body !== "string" || !b.body.trim() || b.body.length > MAX_MINUTES) return err(c, 400, "invalid_minutes");
+    const target = b.id === undefined ? (await store.minutes(m.id))?.id : versionId(b.id);
+    if (!target || !(await store.editMinutes(m.id, target, b.body, deps.now()))) return err(c, 404, "not_found");
+    return c.json(minutesJson(await store.minutes(m.id, target)));
   });
 
+  authed.delete("/meetings/:id/minutes/:version", async (c) => {
+    const m = await ownMeeting(c);
+    const id = versionId(c.req.param("version"));
+    if (!m || !id) return err(c, 404, "not_found");
+    await store.deleteMinutes(m.id, id);
+    return c.json({ ok: true });
+  });
+
+  /** All versions. */
   authed.delete("/meetings/:id/minutes", async (c) => {
     const m = await ownMeeting(c);
     if (!m) return err(c, 404, "not_found");
@@ -614,7 +632,8 @@ export function createApp(deps: Deps) {
     // Transcripts are spliced in as stored text, so the export never parses them (CPU-limited hosts).
     const parts: string[] = [];
     for (const m of meetings) {
-      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(await store.minutes(m.id)) });
+      const versions = await store.minutesList(m.id);
+      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson) });
       parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"}}`);
     }
     const data = JSON.stringify({

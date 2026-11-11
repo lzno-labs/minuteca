@@ -6,7 +6,7 @@
  */
 import { t } from "./i18n.ts";
 import type { KeyVault } from "./keys.ts";
-import { LlmError, type LlmAdapter, type LlmProviderId, type LlmRequest, type LlmResult } from "./llm/llm.ts";
+import { isLlmProvider, LlmError, type LlmAdapter, type LlmProviderId, type LlmRequest, type LlmResult } from "./llm/llm.ts";
 import type { MeetingRow, Store, User } from "./storage/store.ts";
 import type { Transcript } from "./transcriber/transcriber.ts";
 
@@ -19,7 +19,7 @@ export interface MinutesDeps {
   timeZone: string;
 }
 
-export type MinutesErrorCode = "no_llm" | "no_llm_key" | "no_llm_consent" | "not_found" | "not_transcribed";
+export type MinutesErrorCode = "no_llm" | "no_llm_key" | "no_llm_consent" | "not_found" | "not_transcribed" | "invalid_provider";
 
 export class MinutesError extends Error {
   code: MinutesErrorCode;
@@ -40,9 +40,14 @@ export function modelFor(user: User, adapter: LlmAdapter): string {
 export async function runLlm(
   deps: MinutesDeps,
   user: User,
-  call: { purpose: "speakers" | "minutes"; meetingId: string | null; request: LlmRequest },
+  call: { purpose: "speakers" | "minutes"; meetingId: string | null; request: LlmRequest; provider?: unknown },
 ): Promise<LlmResult & { provider: LlmProviderId }> {
-  const provider = user.llmProvider;
+  // The person's default, or the one they picked for this generation (to compare models).
+  let provider = user.llmProvider;
+  if (call.provider !== undefined && call.provider !== null) {
+    if (!isLlmProvider(call.provider) || !deps.llm[call.provider]) throw new MinutesError("invalid_provider", 400);
+    provider = call.provider;
+  }
   const adapter = provider ? deps.llm[provider] : undefined;
   if (!provider || !adapter) throw new MinutesError("no_llm", 409);
   if (!user.consents.includes(`llm:${provider}`)) throw new MinutesError("no_llm_consent", 403);
@@ -108,10 +113,21 @@ async function transcribed(deps: MinutesDeps, user: User, meetingId: string): Pr
   return { m, tr, names };
 }
 
+export type Confidence = "high" | "medium" | "low";
+
 export interface SpeakerSuggestion {
   speaker: number;
   name: string;
   evidence: string;
+  confidence: Confidence;
+}
+
+/** Models answer in the prompt's language ("alta") or in English ("high"). */
+function confidenceOf(value: unknown): Confidence {
+  const v = String(value ?? "").toLowerCase();
+  if (["high", "alta", "alto"].includes(v)) return "high";
+  if (["medium", "media", "medio"].includes(v)) return "medium";
+  return "low";
 }
 
 /** The first JSON object in a model's answer (some wrap it in prose or code fences). */
@@ -136,19 +152,20 @@ export function parseSuggestions(raw: unknown, speakers: Set<number>): SpeakerSu
     const speaker = Number(s.speaker);
     const name = typeof s.name === "string" ? s.name.trim().slice(0, 100) : "";
     if (!Number.isInteger(speaker) || !speakers.has(speaker) || !name || out.some((o) => o.speaker === speaker)) continue;
-    out.push({ speaker, name, evidence: typeof s.evidence === "string" ? s.evidence.trim().slice(0, 300) : "" });
+    out.push({ speaker, name, evidence: typeof s.evidence === "string" ? s.evidence.trim().slice(0, 300) : "", confidence: confidenceOf((s as { confidence?: unknown }).confidence) });
   }
   return out;
 }
 
 /** Asks the model who each voice is, from what people say ("Gracias, Marco"). Nothing is saved: the person picks. */
-export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: string, lang: string) {
+export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: string, lang: string, provider?: unknown) {
   const { m, tr } = await transcribed(deps, user, meetingId);
   const speakers = new Set(tr.blocks.map((b) => b.speaker));
   const label = (s: number) => `S${s}`;
   const result = await runLlm(deps, user, {
     purpose: "speakers",
     meetingId: m.id,
+    provider,
     request: {
       system: t(lang, "prompts.speakers.system"),
       prompt: t(lang, "prompts.speakers.user", {
@@ -164,8 +181,8 @@ export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: 
   return { suggestions: parseSuggestions(firstJsonObject(result.text), speakers), provider: result.provider, model: result.model };
 }
 
-/** Writes the minutes from the transcript with the people's names, and saves them with the meeting. */
-export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: string, lang: string) {
+/** Writes the minutes from the transcript with the people's names, and saves them as a new version. */
+export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: string, lang: string, provider?: unknown) {
   const { m, tr, names } = await transcribed(deps, user, meetingId);
   const label = (s: number) => names[String(s)]?.trim() || defaultName(lang, s);
   const participants = [...new Set(tr.blocks.map((b) => label(b.speaker)))];
@@ -175,6 +192,7 @@ export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: 
   const result = await runLlm(deps, user, {
     purpose: "minutes",
     meetingId: m.id,
+    provider,
     request: {
       system: t(lang, "prompts.minutes.system"),
       prompt: t(lang, "prompts.minutes.user", {
@@ -189,6 +207,7 @@ export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: 
       effort: "medium",
     },
   });
-  await deps.store.saveMinutes(m.id, { body: result.text, provider: result.provider, model: result.model, edited: false }, deps.now());
+  // A new version each time, so different models can be compared side by side.
+  await deps.store.addMinutes(m.id, { body: result.text, provider: result.provider, model: result.model }, deps.now());
   return (await deps.store.minutes(m.id))!;
 }

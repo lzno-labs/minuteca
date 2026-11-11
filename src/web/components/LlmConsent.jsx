@@ -7,19 +7,23 @@ import Dialog from "./Dialog";
 /**
  * Asks once per provider before a transcript is sent to a language model: nothing about a person
  * leaves towards an AI without explicit permission. The server refuses without it too.
- * const { ensure, dialog } = useLlmConsent(me, onMeChange); if (await ensure()) ...
+ * const { ensure, dialog } = useLlmConsent(me, onMeChange); if (await ensure(provider)) ...
+ * ensure() without a provider asks for the default one.
  */
 export function useLlmConsent(me, onMeChange) {
   const { t } = useI18n();
-  const [pending, setPending] = useState(null); // { resolve }
-  const id = me?.llm?.provider;
+  const [pending, setPending] = useState(null); // { resolve, id }
+  const id = pending?.id ?? me?.llm?.provider;
   const name = id ? t(`llmProviders.${id}.name`) : "";
 
-  const ensure = useCallback(() => {
-    if (!id) return Promise.resolve(false);
-    if (me.consents.includes(llmConsentId(id))) return Promise.resolve(true);
-    return new Promise((resolve) => setPending({ resolve }));
-  }, [id, me]);
+  const ensure = useCallback(
+    (provider = me?.llm?.provider) => {
+      if (!provider) return Promise.resolve(false);
+      if (me.consents.includes(llmConsentId(provider))) return Promise.resolve(true);
+      return new Promise((resolve) => setPending({ resolve, id: provider }));
+    },
+    [me],
+  );
 
   const close = async (granted) => {
     const p = pending;

@@ -23,7 +23,11 @@ export interface User {
 export const isConsentId = (c: unknown): c is string =>
   isProvider(c) || (typeof c === "string" && c.startsWith("llm:") && isLlmProvider(c.slice(4)));
 
+/** Versions of a meeting's minutes kept, so people can compare language models. */
+export const MAX_MINUTES_VERSIONS = 10;
+
 export interface MinutesRow {
+  id: number;
   body: string;
   provider: string;
   model: string;
@@ -282,22 +286,32 @@ export class Store {
 
   /* ---------- minutes ---------- */
 
-  async minutes(meetingId: string) {
-    return this.db.first<MinutesRow>("SELECT body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ?", [meetingId]);
+  /** Every version of a meeting's minutes, newest first (one per generation, to compare models). */
+  async minutesList(meetingId: string) {
+    return this.db.all<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC", [meetingId]);
   }
-  async saveMinutes(meetingId: string, m: { body: string; provider: string; model: string; edited: boolean }, now: number) {
+  /** The newest version, or one by id. */
+  async minutes(meetingId: string, id?: number) {
+    return id === undefined
+      ? this.db.first<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC LIMIT 1", [meetingId])
+      : this.db.first<MinutesRow>("SELECT id, body, provider, model, edited, created_at, updated_at FROM minutes WHERE meeting_id = ? AND id = ?", [meetingId, id]);
+  }
+  /** A new version; only the newest MAX_MINUTES_VERSIONS are kept. */
+  async addMinutes(meetingId: string, m: { body: string; provider: string; model: string }, now: number) {
+    await this.db.run("INSERT INTO minutes (meeting_id, body, provider, model, edited, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)", [meetingId, m.body, m.provider, m.model, now, now]);
     await this.db.run(
-      `INSERT INTO minutes (meeting_id, body, provider, model, edited, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(meeting_id) DO UPDATE SET body = excluded.body, provider = excluded.provider, model = excluded.model, edited = excluded.edited, updated_at = excluded.updated_at`,
-      [meetingId, m.body, m.provider, m.model, m.edited ? 1 : 0, now, now],
+      "DELETE FROM minutes WHERE meeting_id = ? AND id NOT IN (SELECT id FROM minutes WHERE meeting_id = ? ORDER BY created_at DESC, id DESC LIMIT ?)",
+      [meetingId, meetingId, MAX_MINUTES_VERSIONS],
     );
   }
-  async editMinutes(meetingId: string, body: string, now: number) {
-    const { changes } = await this.db.run("UPDATE minutes SET body = ?, edited = 1, updated_at = ? WHERE meeting_id = ?", [body, now, meetingId]);
+  async editMinutes(meetingId: string, id: number, body: string, now: number) {
+    const { changes } = await this.db.run("UPDATE minutes SET body = ?, edited = 1, updated_at = ? WHERE meeting_id = ? AND id = ?", [body, now, meetingId, id]);
     return changes > 0;
   }
-  async deleteMinutes(meetingId: string) {
-    await this.db.run("DELETE FROM minutes WHERE meeting_id = ?", [meetingId]);
+  /** One version, or all of them. */
+  async deleteMinutes(meetingId: string, id?: number) {
+    if (id === undefined) await this.db.run("DELETE FROM minutes WHERE meeting_id = ?", [meetingId]);
+    else await this.db.run("DELETE FROM minutes WHERE meeting_id = ? AND id = ?", [meetingId, id]);
   }
   async addLlmUsage(u: { userId: string; meetingId: string | null; provider: string; model: string; purpose: string; inputTokens: number; outputTokens: number; now: number }) {
     await this.db.run(

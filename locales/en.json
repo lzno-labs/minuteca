@@ -26,7 +26,10 @@
     "appHint": "This link is for the minuteca recorder on your iPhone.",
     "openApp": "Open in the recorder",
     "appOnlyHere": "Open it on the same iPhone where you asked for the link.",
-    "askAgain": "Ask for another link"
+    "askAgain": "Ask for another link",
+    "desktopHint": "This link is for the minuteca app on your computer.",
+    "openDesktop": "Open in the minuteca app",
+    "desktopOnlyHere": "Open it on the same computer where you asked for the link."
   },
   "app": {
     "openHistory": "Open meeting history",
@@ -275,6 +278,11 @@
       "name": "OpenAI",
       "where": "United States",
       "privacy": "Per its policy, it does not train on API audio. It accepts files of up to 25 MB."
+    },
+    "local": {
+      "name": "This computer",
+      "where": "on this computer",
+      "privacy": "The audio is transcribed here, with models that run on the computer: it does not go to any AI provider."
     }
   },
   "share": {
@@ -379,13 +387,18 @@
     "llm_unavailable": "The provider did not answer properly. Try again.",
     "llm_timeout": "The model took too long. Try again.",
     "llm_empty_answer": "The model returned no text. Try again.",
-    "llm_region": "The provider does not accept requests from where the minuteca server runs. Try another provider."
+    "llm_region": "The provider does not accept requests from where the minuteca server runs. Try another provider.",
+    "not_ready": "This meeting has no audio ready to transcribe, or it is already being transcribed.",
+    "decode_failed": "Could not read this meeting's audio.",
+    "models_failed": "Could not download the models. Check your connection and try again.",
+    "engine_failed": "The transcription engine stopped. Try again; if it keeps happening, restart the app."
   },
   "mail": {
     "signIn": {
       "subject": "Your link to sign in to minuteca",
       "body": "Hi,\n\nTo sign in to minuteca, open this link within {minutes} minutes:\n\n{link}\n\nIf you did not ask for it, ignore this email.\n\nminuteca",
-      "bodyApp": "Hi,\n\nTo sign in to the minuteca recorder, open this link on your iPhone within {minutes} minutes and tap \"Open in the recorder\":\n\n{link}\n\nIf you did not ask for it, ignore this email.\n\nminuteca"
+      "bodyApp": "Hi,\n\nTo sign in to the minuteca recorder, open this link on your iPhone within {minutes} minutes and tap \"Open in the recorder\":\n\n{link}\n\nIf you did not ask for it, ignore this email.\n\nminuteca",
+      "bodyDesktop": "Hello,\n\nTo sign in to minuteca on your computer, open this link on that same computer within {minutes} minutes and tap \"Open in the minuteca app\":\n\n{link}\n\nIf you did not ask for it, ignore this email.\n\nminuteca"
     }
   },
   "prompts": {
@@ -472,5 +485,20 @@
       "where": "this server",
       "privacy": "The transcript does not leave the minuteca server."
     }
+  },
+  "local": {
+    "start": "Transcribe on this computer",
+    "explain": "The audio is transcribed here, without sending it to any AI provider and at no cost. The first time, it downloads the models (about 700 MB).",
+    "keepOpen": "Keep the app open until it finishes. The computer will not sleep meanwhile.",
+    "starting": "Getting ready…",
+    "models": "Downloading the models (first time only): {done} of {total} MB",
+    "audio": "Downloading the meeting audio…",
+    "decode": "Reading the audio…",
+    "voices": "Telling voices apart…",
+    "text": "Transcribing: {done} of {total} turns",
+    "save": "Saving the transcript…",
+    "cancel": "Cancel",
+    "cancelled": "The transcription was cancelled.",
+    "failed": "Could not transcribe on this computer: {reason}"
   }
 }

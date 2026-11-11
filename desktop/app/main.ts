@@ -1,10 +1,16 @@
 // minuteca for Mac and Windows (docs/adr/0005, docs/design/desktop-app.md): a window that shows the
 // person's minuteca server, plus transcription on this computer. The window never gets Node; the
 // main process holds the session token and adds it only to requests to that server.
-import { app, BrowserWindow, ipcMain, Menu, net, powerSaveBlocker, safeStorage, session, shell, systemPreferences, utilityProcess, type IpcMainInvokeEvent, type UtilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, powerSaveBlocker, safeStorage, session, shell, systemPreferences, utilityProcess, type IpcMainInvokeEvent, type UtilityProcess } from "electron";
+import { autoUpdater } from "electron-updater";
+import en from "../../locales/en.json" with { type: "json" };
+import es from "../../locales/es.json" with { type: "json" };
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { accessToken, challengeOf, DEFAULT_SERVER, errorCode, externalAllowed, isMeetingId, linkInArgs, newVerifier, sameOrigin, serverOrigin } from "./core.ts";
+
+/** Set by build.mjs: true only for Mac builds with a Developer ID signature, which macOS lets update themselves. */
+declare const __MAC_SIGNED__: boolean;
 
 const ORIGIN = serverOrigin(process.env.MINUTECA_SERVER) ?? serverOrigin(readConfig().server) ?? DEFAULT_SERVER;
 const SESSION_FILE = () => join(app.getPath("userData"), "session.json");
@@ -206,6 +212,10 @@ ipcMain.handle("desktop:transcribe", async (e, meetingId: unknown) => {
     powerSaveBlocker.stop(awake);
     worker.kill();
     job = null;
+    if (promptAfterJob) {
+      promptAfterJob = false;
+      void offer();
+    }
   }
 });
 
@@ -213,6 +223,84 @@ ipcMain.on("desktop:cancel", (e) => {
   if (!fromServer(e) || !job) return;
   job.cancelled = true;
   job.worker.kill();
+});
+
+/* ---------- updates: the server publishes the feeds at /api/desktop (ADR 0005) ---------- */
+
+type UpdateState = { status: "dev" | "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error"; version?: string };
+let update: UpdateState = { status: app.isPackaged ? "idle" : "dev" };
+// macOS only installs updates of apps with a Developer ID signature; unsigned builds get a download link.
+const canInstall = process.platform !== "darwin" || __MAC_SIGNED__;
+let prompted = "";
+let promptAfterJob = false;
+
+// Spanish unless the computer asks for English (AGENTS.md §10); texts live with the web's.
+const words = () => (app.getLocale().toLowerCase().startsWith("en") ? en : es).desktopApp;
+const fill = (text: string, version = "") => text.replace("{version}", version);
+
+function setUpdate(next: UpdateState) {
+  update = next;
+  if (win && !win.isDestroyed()) win.webContents.send("desktop:update", update);
+}
+
+async function offer() {
+  if (!update.version || prompted === update.version || !win) return;
+  if (job) {
+    promptAfterJob = true;
+    return;
+  }
+  prompted = update.version;
+  const w = words();
+  if (update.status === "ready") {
+    const r = await dialog.showMessageBox(win, { type: "info", message: fill(w.readyDialog, update.version), buttons: [w.restart, w.later], defaultId: 0, cancelId: 1 });
+    if (r.response === 0) autoUpdater.quitAndInstall();
+  } else if (update.status === "available") {
+    const r = await dialog.showMessageBox(win, { type: "info", message: fill(w.availableDialog, update.version), buttons: [w.download, w.later], defaultId: 0, cancelId: 1 });
+    if (r.response === 0) void shell.openExternal(`${ORIGIN}/descargar`);
+  }
+}
+
+async function checkUpdates(): Promise<UpdateState> {
+  if (!app.isPackaged) return update;
+  const result = await autoUpdater.checkForUpdates().catch(() => {
+    setUpdate({ status: "error" });
+    return undefined;
+  });
+  // null: this kind of build cannot update itself (for example a Linux folder build).
+  if (result === null) setUpdate({ status: "dev" });
+  return update;
+}
+
+function setupUpdates() {
+  if (!app.isPackaged) return;
+  autoUpdater.setFeedURL({ provider: "generic", url: `${ORIGIN}/api/desktop` });
+  autoUpdater.autoDownload = canInstall;
+  autoUpdater.autoInstallOnAppQuit = canInstall;
+  autoUpdater.on("checking-for-update", () => setUpdate({ status: "checking" }));
+  autoUpdater.on("update-not-available", () => setUpdate({ status: "current", version: app.getVersion() }));
+  autoUpdater.on("update-available", (i) => {
+    setUpdate({ status: canInstall ? "downloading" : "available", version: i.version });
+    if (!canInstall) void offer();
+  });
+  autoUpdater.on("update-downloaded", (i) => {
+    setUpdate({ status: "ready", version: i.version });
+    void offer();
+  });
+  autoUpdater.on("error", (e) => {
+    console.error("update", e.message);
+    setUpdate({ status: "error" });
+  });
+  setTimeout(() => void checkUpdates(), 15_000);
+  setInterval(() => void checkUpdates(), 6 * 60 * 60_000);
+}
+
+ipcMain.handle("desktop:info", (e) => (fromServer(e) ? { value: { version: app.getVersion(), update } } : { error: "generic" }));
+ipcMain.handle("desktop:checkUpdates", async (e) => (fromServer(e) ? { value: await checkUpdates() } : { error: "generic" }));
+ipcMain.handle("desktop:installUpdate", (e) => {
+  if (!fromServer(e)) return { error: "generic" };
+  if (update.status === "ready") autoUpdater.quitAndInstall();
+  else if (update.status === "available") void shell.openExternal(`${ORIGIN}/descargar`);
+  return { value: true };
 });
 
 /* ---------- app lifecycle ---------- */
@@ -249,9 +337,23 @@ if (!app.requestSingleInstanceLock()) {
       else done(ok);
     });
     ses.setPermissionCheckHandler((_wc, permission, origin) => permission === "media" && sameOrigin(origin, ORIGIN));
-    if (process.platform === "darwin") Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" }]));
-    else Menu.setApplicationMenu(null);
+    if (process.platform === "darwin") {
+      const checkFromMenu = async () => {
+        const s = await checkUpdates();
+        if (s.status === "current" && win) void dialog.showMessageBox(win, { type: "info", message: fill(words().currentDialog, app.getVersion()) });
+        else void offer();
+      };
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([
+          { label: app.name, submenu: [{ role: "about" }, { label: `${words().check}…`, click: () => void checkFromMenu() }, { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" }, { type: "separator" }, { role: "quit" }] },
+          { role: "editMenu" },
+          { role: "viewMenu" },
+          { role: "windowMenu" },
+        ]),
+      );
+    } else Menu.setApplicationMenu(null);
     createWindow();
+    setupUpdates();
     void openLink(linkInArgs(process.argv));
     app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
   });

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createApp, maintenance, type Deps } from "./app.ts";
 import { appConfig, mailFrom } from "./config.ts";
 import { diskFiles } from "./files/disk.ts";
+import { diskDownloads } from "./files/downloads.ts";
 import { hostedKeys } from "./hosted.ts";
 import { KeyVault } from "./keys.ts";
 import { memoryLimiter } from "./limits.ts";
@@ -106,6 +107,8 @@ async function main() {
     now: Date.now,
     clientIp: (req) => req.headers.get(IP_HEADER) ?? "unknown",
     assets: serveDist,
+    // Desktop installers and update feeds, when this server publishes them (ADR 0005).
+    downloads: env.MINUTECA_DOWNLOADS_DIR ? diskDownloads(env.MINUTECA_DOWNLOADS_DIR) : undefined,
   };
   const app = createApp(deps);
   const trustProxy = env.TRUST_PROXY === "1";

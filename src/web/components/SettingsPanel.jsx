@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { useConfirm } from "./Confirm";
 import LanguageSwitch from "./LanguageSwitch";
 import LlmSettings from "./LlmSettings";
+import DesktopAppCard from "./DesktopAppCard";
 
 const card = "rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm";
 const input =
@@ -228,6 +229,8 @@ export default function SettingsPanel({ me, onMeChange, onBack, onSignOut }) {
         </h2>
         <p className="mt-1 text-sm text-slate-600">{t("settings.iosHint")}</p>
       </section>
+
+      <DesktopAppCard />
 
       <section className={card}>
         <h2 className="font-semibold text-slate-900">{t("settings.data")}</h2>

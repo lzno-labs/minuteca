@@ -3,7 +3,8 @@ import { Hono, type Context } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { Config } from "./config.ts";
 import { challengeMatches, randomToken, sha256Hex, TOKEN_RE } from "./crypto.ts";
-import { audioKey, parseRange, rawKey, type Files } from "./files/files.ts";
+import { audioKey, parseRange, rawKey, type FileRange, type Files, type StoredFile } from "./files/files.ts";
+import { DOWNLOAD_RE, type Downloads } from "./files/downloads.ts";
 import { pickLanguage, t } from "./i18n.ts";
 import { isKeyVendor, plausibleKey, type KeyVault } from "./keys.ts";
 import { isLlmProvider, LLM_PROVIDERS, LlmError, MODEL_RE, type LlmAdapter, type LlmProviderId } from "./llm/llm.ts";
@@ -40,6 +41,8 @@ export interface Deps {
   clientIp: (req: Request) => string;
   /** Static files of the web app (dist/). */
   assets?: (req: Request) => Promise<Response>;
+  /** Desktop installers and update feeds (ADR 0005); absent where none are published. */
+  downloads?: Downloads;
 }
 
 type Env = { Variables: { user: User; lang: string; auth: "cookie" | "bearer" } };
@@ -150,10 +153,23 @@ export function createApp(deps: Deps) {
     c.res.headers.set("Permissions-Policy", "microphone=(self), camera=(), geolocation=()");
     if (!c.res.headers.has("Content-Security-Policy")) c.res.headers.set("Content-Security-Policy", CSP);
     if (secure) c.res.headers.set("Strict-Transport-Security", "max-age=31536000");
-    if (c.req.path.startsWith("/api/")) c.res.headers.set("Cache-Control", "no-store");
+    // API answers are never cached, unless a route says otherwise (desktop installers, audio).
+    if (c.req.path.startsWith("/api/") && !c.res.headers.has("Cache-Control")) c.res.headers.set("Cache-Control", "no-store");
   });
 
   app.get("/health", (c) => c.json({ ok: true, core: config.coreSha }));
+
+  /** Desktop installers and update feeds (ADR 0005): public, like any download page. */
+  app.get("/api/desktop/:file", (c) => {
+    const name = c.req.param("file") ?? "";
+    if (!deps.downloads || !DOWNLOAD_RE.test(name)) return err(c, 404, "not_found");
+    const feed = name.endsWith(".yml");
+    return sendFile(c, (range) => deps.downloads!.get(name, range), {
+      // Feeds change with each release; installers never change under the same name.
+      "Cache-Control": feed ? "no-cache" : "public, max-age=86400",
+      ...(feed ? {} : { "Content-Disposition": `attachment; filename="${name}"` }),
+    });
+  });
 
   /* ---------- sign in (docs/adr/0003-access.md) ---------- */
 
@@ -489,23 +505,7 @@ export function createApp(deps: Deps) {
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
-  const sendAudio = async (c: C, key: string) => {
-    const head = await files.get(key, { offset: 0, length: 1 });
-    if (!head) return err(c, 404, "not_found");
-    head.body.cancel().catch(() => {});
-    const range = parseRange(c.req.header("Range"), head.size);
-    if (range === "invalid") return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${head.size}` } });
-    const f = await files.get(key, range ?? undefined);
-    if (!f) return err(c, 404, "not_found");
-    const headers = new Headers({ "Content-Type": f.contentType, "Accept-Ranges": "bytes", "Cache-Control": "private, no-store" });
-    if (f.range) {
-      headers.set("Content-Range", `bytes ${f.range.offset}-${f.range.offset + f.range.length - 1}/${f.size}`);
-      headers.set("Content-Length", String(f.range.length));
-      return new Response(f.body, { status: 206, headers });
-    }
-    headers.set("Content-Length", String(f.size));
-    return new Response(f.body, { status: 200, headers });
-  };
+  const sendAudio = (c: C, key: string) => sendFile(c, (range) => files.get(key, range), { "Cache-Control": "private, no-store" });
 
   authed.get("/meetings/:id/audio", async (c) => {
     const m = await ownMeeting(c);
@@ -739,6 +739,25 @@ export async function autoTranscribe(tdeps: TranscriptionDeps, userId: string, m
  * space every few seconds (JSON allows leading whitespace) and then the JSON; an error then carries
  * its real status in `errorStatus`, which the web client turns back into an error.
  */
+/** A stored file with byte ranges (players and the desktop updater ask for parts). */
+export async function sendFile(c: { req: { header(name: string): string | undefined }; json(body: unknown, status?: number): Response }, get: (range?: FileRange) => Promise<StoredFile | null>, extra: Record<string, string>): Promise<Response> {
+  const head = await get({ offset: 0, length: 1 });
+  if (!head) return c.json({ error: "not_found" }, 404);
+  head.body.cancel().catch(() => {});
+  const range = parseRange(c.req.header("Range"), head.size);
+  if (range === "invalid") return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${head.size}` } });
+  const f = await get(range ?? undefined);
+  if (!f) return c.json({ error: "not_found" }, 404);
+  const headers = new Headers({ "Content-Type": f.contentType, "Accept-Ranges": "bytes", ...extra });
+  if (f.range) {
+    headers.set("Content-Range", `bytes ${f.range.offset}-${f.range.offset + f.range.length - 1}/${f.size}`);
+    headers.set("Content-Length", String(f.range.length));
+    return new Response(f.body, { status: 206, headers });
+  }
+  headers.set("Content-Length", String(f.size));
+  return new Response(f.body, { status: 200, headers });
+}
+
 export async function keepAlive(work: Promise<Response>, { after = 5_000, every = 15_000 } = {}): Promise<Response> {
   let wait: ReturnType<typeof setTimeout> | undefined;
   const quick = await Promise.race([work, new Promise<null>((resolve) => (wait = setTimeout(() => resolve(null), after)))]);

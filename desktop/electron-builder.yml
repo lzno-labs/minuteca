@@ -16,8 +16,11 @@ protocols:
   - name: minuteca
     schemes: [minuteca]
 mac:
+  # The DMG is for the first install; the ZIP is what the updater downloads.
   target:
     - target: dmg
+      arch: [arm64, x64]
+    - target: zip
       arch: [arm64, x64]
   category: public.app-category.productivity
   # Ad hoc signature until the Developer ID one: Apple Silicon refuses unsigned code.
@@ -38,4 +41,7 @@ nsis:
   artifactName: minuteca-${version}-windows-${arch}.${ext}
 linux:
   target: [dir]
-publish: null
+# Update feeds (latest.yml, latest-mac.yml) for this URL; the app reads them from its own server at run time.
+publish:
+  provider: generic
+  url: https://minuteca.lzno.app/api/desktop

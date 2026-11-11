@@ -5,13 +5,13 @@ import { desktopBridge } from "../lib/desktop";
 import { useI18n } from "../i18n";
 import LanguageSwitch from "./LanguageSwitch";
 
-function Shell({ children }) {
+export function Shell({ children, icon }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 via-slate-50 to-slate-100 p-4">
       <LanguageSwitch className="absolute right-4 top-4" />
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-surface p-8 text-center shadow-xl">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg">
-          <Mic className="h-7 w-7" />
+          {icon ?? <Mic className="h-7 w-7" />}
         </div>
         {children}
       </div>

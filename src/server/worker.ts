@@ -4,6 +4,7 @@
 // account has one free, and from requests in any case (see fetch below).
 import { createApp, maintenance, type Deps } from "./app.ts";
 import { appConfig, mailFrom, type EnvVars } from "./config.ts";
+import { r2Downloads } from "./files/downloads.ts";
 import { r2Files, type R2Like } from "./files/r2.ts";
 import { hostedKeys } from "./hosted.ts";
 import { KeyVault } from "./keys.ts";
@@ -19,6 +20,8 @@ type Bindings = {
   ASSETS?: { fetch(req: Request): Promise<Response> };
   LOGIN_LIMITER?: CloudflareRateLimit;
   TOKEN_LIMITER?: CloudflareRateLimit;
+  /** Optional bucket with the desktop installers and update feeds (ADR 0005). */
+  DOWNLOADS?: R2Like;
 };
 type WorkerEnv = EnvVars & Bindings;
 
@@ -66,6 +69,7 @@ function setup(env: WorkerEnv, origin: string) {
     now: Date.now,
     clientIp: (req) => req.headers.get("CF-Connecting-IP") ?? "unknown",
     assets: env.ASSETS ? (req) => env.ASSETS!.fetch(req) : undefined,
+    downloads: env.DOWNLOADS ? r2Downloads(env.DOWNLOADS) : undefined,
   };
   cached = { app: createApp(deps), deps };
   return cached;

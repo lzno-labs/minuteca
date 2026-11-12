@@ -69,12 +69,21 @@ export function llmErrorFor(provider: string, status: number): LlmError {
 
 export type Fetcher = typeof fetch;
 
-export async function llmCall(provider: string, fetcher: Fetcher, url: string, init: RequestInit, timeoutMs = 300_000): Promise<Response> {
+/**
+ * A provider request with an overall time limit, and optionally a limit for the answer to start
+ * (headersMs): a provider swamped with requests sometimes holds the connection open without a word.
+ */
+export async function llmCall(provider: string, fetcher: Fetcher, url: string, init: RequestInit, timeoutMs = 300_000, headersMs?: number): Promise<Response> {
+  const start = new AbortController();
+  const wait = headersMs ? setTimeout(() => start.abort(), headersMs) : undefined;
   try {
-    return await fetcher(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    return await fetcher(url, { ...init, signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), start.signal]) });
   } catch (err) {
+    if (start.signal.aborted) throw new LlmError("overloaded", `${provider} did not start answering`);
     if ((err as Error).name === "TimeoutError") throw new LlmError("timeout", `${provider} timed out`);
     throw new LlmError("unavailable", `could not reach ${provider}`);
+  } finally {
+    clearTimeout(wait);
   }
 }
 

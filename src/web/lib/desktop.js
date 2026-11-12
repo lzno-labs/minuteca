@@ -7,6 +7,15 @@ export function desktopBridge() {
   return (typeof window !== "undefined" && window.minutecaDesktop) || null;
 }
 
+/** Desktop app 0.1.2 and later list, download and delete local speech models (docs/adr/0007). */
+export const hasLocalModels = (bridge) => Boolean(bridge && typeof bridge.models === "function");
+
+/** The model to transcribe with: the one chosen on this computer if it still exists, else the recommended one. */
+export function chosenLocalModel(models, saved) {
+  if (!Array.isArray(models) || !models.length) return null;
+  return (models.find((m) => m.id === saved) ?? models.find((m) => m.recommended) ?? models[0]).id;
+}
+
 /** Progress from the bridge to a translation key and its values. */
 export function progressText(p) {
   if (!p) return { key: "local.starting", values: {} };

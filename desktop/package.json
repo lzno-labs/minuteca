@@ -1,7 +1,7 @@
 {
   "name": "minuteca-desktop",
   "productName": "minuteca",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "minuteca for Mac and Windows: the web app plus transcription on the computer",
   "author": "Lzno",

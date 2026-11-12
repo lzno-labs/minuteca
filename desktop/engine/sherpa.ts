@@ -2,7 +2,7 @@
 // downloads native binaries. Speaker settings come from the spike in docs/adr/0005.
 import { createRequire } from "node:module";
 import { SAMPLE_RATE } from "./blocks.ts";
-import { modelPath } from "./models.ts";
+import { DEFAULT_SPEECH, modelName, modelPath, speechModel, type SpeechModelId } from "./models.ts";
 import type { Engine } from "./pipeline.ts";
 
 /**
@@ -21,8 +21,11 @@ export function loadSherpa(): unknown {
   }
 }
 
-export function sherpaEngine(dir: string, threads: number, module: unknown = loadSherpa()): Engine {
+export function sherpaEngine(dir: string, threads: number, module: unknown = loadSherpa(), model: SpeechModelId = DEFAULT_SPEECH): Engine {
   const sherpa = module as any;
+  const speech = speechModel(model);
+  if (!speech) throw new Error(`unknown model ${model}`);
+  const file = (name: string) => modelPath(dir, `${speech.folder}/${name}`);
   const diarizer = (threshold: number) =>
     new sherpa.OfflineSpeakerDiarization({
       segmentation: { pyannote: { model: modelPath(dir, "segmentation/model.onnx") }, numThreads: threads },
@@ -33,19 +36,25 @@ export function sherpaEngine(dir: string, threads: number, module: unknown = loa
     });
   const recognizer = new sherpa.OfflineRecognizer({
     featConfig: { sampleRate: SAMPLE_RATE, featureDim: 80 },
-    modelConfig: {
-      transducer: {
-        encoder: modelPath(dir, "parakeet/encoder.int8.onnx"),
-        decoder: modelPath(dir, "parakeet/decoder.int8.onnx"),
-        joiner: modelPath(dir, "parakeet/joiner.int8.onnx"),
-      },
-      tokens: modelPath(dir, "parakeet/tokens.txt"),
-      numThreads: threads,
-      provider: "cpu",
-      modelType: "nemo_transducer",
-    },
+    modelConfig:
+      speech.kind === "whisper"
+        ? {
+            // An empty language lets Whisper detect it; it is reported with each result.
+            whisper: { encoder: file("encoder.int8.onnx"), decoder: file("decoder.int8.onnx"), language: "", task: "transcribe", tailPaddings: -1 },
+            tokens: file("tokens.txt"),
+            numThreads: threads,
+            provider: "cpu",
+          }
+        : {
+            transducer: { encoder: file("encoder.int8.onnx"), decoder: file("decoder.int8.onnx"), joiner: file("joiner.int8.onnx") },
+            tokens: file("tokens.txt"),
+            numThreads: threads,
+            provider: "cpu",
+            modelType: "nemo_transducer",
+          },
   });
   return {
+    name: modelName(speech.id),
     diarize(samples, threshold = DEFAULT_THRESHOLD) {
       return diarizer(threshold).process(samples).map((s: { start: number; end: number; speaker: number }) => ({ start: s.start, end: s.end, speaker: s.speaker }));
     },
@@ -54,7 +63,7 @@ export function sherpaEngine(dir: string, threads: number, module: unknown = loa
       stream.acceptWaveform({ sampleRate: SAMPLE_RATE, samples });
       recognizer.decode(stream);
       const r = recognizer.getResult(stream);
-      return { text: r.text ?? "", tokens: r.tokens ?? [], timestamps: r.timestamps ?? [], durations: r.durations };
+      return { text: r.text ?? "", tokens: r.tokens ?? [], timestamps: r.timestamps ?? [], durations: r.durations, lang: r.lang || undefined };
     },
   };
 }

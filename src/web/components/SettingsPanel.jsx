@@ -7,6 +7,7 @@ import { useConfirm } from "./Confirm";
 import LanguageSwitch from "./LanguageSwitch";
 import LlmSettings from "./LlmSettings";
 import DesktopAppCard from "./DesktopAppCard";
+import LocalModels from "./LocalModels";
 
 const card = "rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm";
 const input =
@@ -16,7 +17,7 @@ const input =
  * Provider choice, each person's own keys (docs/design/own-provider-keys.md), permissions to send
  * audio, usage this month, "download all my data" and the account.
  */
-export default function SettingsPanel({ me, onMeChange, onBack, onSignOut }) {
+export default function SettingsPanel({ me, onMeChange, onBack, onSignOut, settings, onSettingsChange }) {
   const { t, locale } = useI18n();
   const confirm = useConfirm();
   const [editing, setEditing] = useState(null); // provider whose key form is open
@@ -230,6 +231,7 @@ export default function SettingsPanel({ me, onMeChange, onBack, onSignOut }) {
         <p className="mt-1 text-sm text-slate-600">{t("settings.iosHint")}</p>
       </section>
 
+      <LocalModels settings={settings} onSettingsChange={onSettingsChange} />
       <DesktopAppCard />
 
       <section className={card}>

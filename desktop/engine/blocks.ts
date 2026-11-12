@@ -18,6 +18,8 @@ export interface Recognized {
   tokens: string[];
   timestamps: number[];
   durations?: number[];
+  /** The language the model heard (Whisper: "es", "en"...). */
+  lang?: string;
 }
 
 export interface Piece extends Segment {
@@ -72,7 +74,9 @@ export function splitLong(windows: Segment[], samples: Float32Array, maxSeconds 
 }
 
 /** Sentences with times from the recognizer's tokens; a sentence ends at . ? ! or … */
-export function sentencesFrom(r: Recognized, offset: number): Sentence[] {
+export function sentencesFrom(r: Recognized, offset: number, duration = 0): Sentence[] {
+  // Whisper gives no word times: its sentences share the window's time in proportion to their length.
+  if (!r.timestamps.length && duration > 0) return spreadSentences(r.text, offset, duration);
   const out: Sentence[] = [];
   let cur: Sentence | null = null;
   const close = () => {
@@ -89,6 +93,28 @@ export function sentencesFrom(r: Recognized, offset: number): Sentence[] {
   });
   close();
   return out;
+}
+
+/** Splits text into sentences and spreads them over [offset, offset + duration] by length. */
+export function spreadSentences(text: string, offset: number, duration: number): Sentence[] {
+  const parts = text.trim().match(/[^.?!…]+[.?!…]*\s*/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+  const total = parts.reduce((n, s) => n + s.length, 0) || 1;
+  let at = offset;
+  return parts.map((s) => {
+    const start = at;
+    at += (duration * s.length) / total;
+    return { start: round(start), end: round(at), text: s };
+  });
+}
+
+/** The language heard most often across windows, as a two-letter code, or null. */
+export function mostFrequent(langs: (string | undefined)[]): string | null {
+  const counts = new Map<string, number>();
+  for (const l of langs) {
+    const code = (l ?? "").replace(/[<|>]/g, "").slice(0, 2).toLowerCase();
+    if (/^[a-z]{2}$/.test(code)) counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
 /** Blocks in minuteca's format: same voice in a row becomes one block, voices numbered by first appearance. */

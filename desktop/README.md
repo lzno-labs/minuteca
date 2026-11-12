@@ -43,9 +43,11 @@ npm run local:transcribe -- ~/Downloads/meeting.m4a --compare ~/Downloads/meetin
 - Models download once (about 700 MB, pinned Hugging Face revisions, checked by SHA-256) into `~/.cache/minuteca/models` (`--models` or `MINUTECA_MODELS` to change it). The app uses the same folder.
 - It writes `meeting.local.txt` and `meeting.local.json` next to the audio. `--compare` takes the TXT export of the same meeting, a minuteca JSON transcript or a raw Deepgram answer and prints how alike words and voices are.
 - `--threshold`: lower it (0.4) if two people came out as one voice, raise it (0.6) if one person came out as several.
+- `--model`: `parakeet-v3` (default), `whisper-turbo`, `whisper-small` or `whisper-base`. In the app, Settings shows the same models with a recommendation for the computer (ADR 0007).
 
 ## Models and credits
 
 - NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0), speech to text in 25 languages including Spanish.
+- OpenAI Whisper large-v3 turbo, small and base (MIT), optional, ONNX exports by the sherpa-onnx project.
 - pyannote segmentation 3.0 (MIT) and WeSpeaker ResNet34-LM trained on VoxCeleb (CC-BY-4.0), to tell voices apart.
 - All run through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) inside [Electron](https://www.electronjs.org) (MIT).

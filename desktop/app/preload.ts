@@ -1,5 +1,6 @@
 // The bridge the minuteca web sees as window.minutecaDesktop (src/web/lib/desktop.js). It runs
-// sandboxed and exposes sign-in, local transcription and updates only: no file system, no Node.
+// sandboxed and exposes sign-in, local transcription, local models and updates only: no file
+// system, no Node.
 import { contextBridge, ipcRenderer } from "electron";
 
 type Progress = { step: string; done?: number; total?: number };
@@ -17,14 +18,25 @@ async function call(channel: string, ...args: unknown[]) {
 
 contextBridge.exposeInMainWorld("minutecaDesktop", {
   requestLink: (email: string) => call("desktop:requestLink", String(email)),
-  transcribe: async (meetingId: string, onProgress?: (p: Progress) => void) => {
+  transcribe: async (meetingId: string, onProgress?: (p: Progress) => void, options?: { model?: string }) => {
     listener = typeof onProgress === "function" ? onProgress : null;
     try {
-      return await call("desktop:transcribe", String(meetingId));
+      return await call("desktop:transcribe", String(meetingId), { model: typeof options?.model === "string" ? options.model : undefined });
     } finally {
       listener = null;
     }
   },
+  // Local speech models (ADR 0007): this computer, the catalog, and downloading or deleting one.
+  models: () => call("desktop:models"),
+  downloadModel: async (id: string, onProgress?: (p: Progress) => void) => {
+    listener = typeof onProgress === "function" ? onProgress : null;
+    try {
+      return await call("desktop:model", "download", String(id));
+    } finally {
+      listener = null;
+    }
+  },
+  deleteModel: (id: string) => call("desktop:model", "delete", String(id)),
   cancel: () => ipcRenderer.send("desktop:cancel"),
   // Version and updates: the web shows them in Settings.
   info: () => call("desktop:info"),

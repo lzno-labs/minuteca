@@ -295,7 +295,7 @@ function Workspace({ me, onMeChange, onSignOut }) {
             {selectedId === USERS_VIEW ? (
               <UsersPanel currentEmail={me.email} onBack={() => select(null)} />
             ) : selectedId === SETTINGS_VIEW ? (
-              <SettingsPanel me={me} onMeChange={onMeChange} onBack={() => select(null)} onSignOut={handleSignOut} />
+              <SettingsPanel me={me} onMeChange={onMeChange} onBack={() => select(null)} onSignOut={handleSignOut} settings={settings} onSettingsChange={updateSettings} />
             ) : selectedId === null ? (
               <>
                 <TranscriptionStatus job={job} onRetry={() => runUpload(job.source)} onDismiss={() => setJob(null)} />

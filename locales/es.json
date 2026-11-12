@@ -546,7 +546,10 @@
     "save": "Guardando la transcripción…",
     "cancel": "Cancelar",
     "cancelled": "Se canceló la transcripción.",
-    "failed": "No se pudo transcribir en esta computadora: {reason}"
+    "failed": "No se pudo transcribir en esta computadora: {reason}",
+    "explainModel": "Con {model}. El audio se transcribe aquí, sin enviarlo a ningún proveedor de IA y sin costo.",
+    "firstDownload": "Antes se descarga el modelo, una sola vez ({size} MB).",
+    "changeModel": "Cambiar de modelo"
   },
   "download": {
     "title": "minuteca para tu computadora",
@@ -606,5 +609,30 @@
     "namesNone": "La IA no encontró nombres seguros. Puedes ponerlos en Transcripción.",
     "minutesDone": "La minuta está lista. Revísala antes de enviarla.",
     "failed": "No se pudo terminar solo: {reason} Puedes seguir con los botones."
+  },
+  "localModels": {
+    "title": "Transcribir en esta computadora",
+    "hint": "Estos modelos corren en esta computadora: el audio no sale hacia ningún proveedor de IA y no cuesta nada. Elige uno; se descarga una sola vez.",
+    "computer": "Esta computadora: {memory} GB de memoria, {cores} núcleos",
+    "recommended": "Recomendado",
+    "downloaded": "Descargado",
+    "size": "{size} MB",
+    "speed": "Aprox. {minutes} min por cada hora de audio",
+    "slow": "Lento en esta computadora: aprox. {minutes} min por cada hora de audio",
+    "tooBig": "Pide {memory} GB de memoria; esta computadora tiene menos y puede ir muy lento",
+    "use": "Usar {model}",
+    "download": "Descargar ({size} MB)",
+    "downloading": "Descargando: {done} de {total} MB",
+    "delete": "Borrar",
+    "deleteTitle": "¿Borrar {model} de esta computadora?",
+    "deleteBody": "Se libera el espacio. Si lo vuelves a usar, se descarga de nuevo.",
+    "failed": "No se pudo: {reason}",
+    "credits": "Créditos: {credits}.",
+    "describe": {
+      "parakeet-v3": "El más preciso y el más rápido en nuestras pruebas en español. Entiende 25 idiomas europeos.",
+      "whisper-turbo": "Whisper grande y optimizado: suele aguantar mejor el ruido de una sala y detecta el idioma. Más lento y más pesado.",
+      "whisper-small": "Whisper mediano: más liviano, algo menos preciso.",
+      "whisper-base": "Whisper liviano, para computadoras con poca memoria. Menos preciso."
+    }
   }
 }

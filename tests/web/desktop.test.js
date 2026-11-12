@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { desktopBridge, detectOs, installerFile, installerUrl, progressText } from "../../src/web/lib/desktop";
+import { chosenLocalModel, desktopBridge, detectOs, hasLocalModels, installerFile, installerUrl, progressText } from "../../src/web/lib/desktop";
 
 describe("desktop bridge", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -10,6 +10,16 @@ describe("desktop bridge", () => {
     const bridge = { transcribe: () => {} };
     vi.stubGlobal("window", { minutecaDesktop: bridge });
     expect(desktopBridge()).toBe(bridge);
+  });
+
+  it("knows which desktop apps choose local models, and which model to use", () => {
+    expect(hasLocalModels({ transcribe() {} })).toBe(false);
+    expect(hasLocalModels({ transcribe() {}, models() {} })).toBe(true);
+    const models = [{ id: "parakeet-v3", recommended: true }, { id: "whisper-small" }];
+    expect(chosenLocalModel(models, "whisper-small")).toBe("whisper-small");
+    expect(chosenLocalModel(models, "whisper-gone")).toBe("parakeet-v3");
+    expect(chosenLocalModel(models, undefined)).toBe("parakeet-v3");
+    expect(chosenLocalModel([], "x")).toBeNull();
   });
 
   it("turns progress into texts", () => {

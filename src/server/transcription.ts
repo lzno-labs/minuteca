@@ -96,7 +96,7 @@ export async function startTranscription(
   deps: TranscriptionDeps,
   user: User,
   meetingId: string,
-  options: { provider: Provider; language?: string },
+  options: { provider: Provider; language?: string; again?: boolean },
 ): Promise<MeetingRow> {
   const { store } = deps;
   const { provider } = options;
@@ -104,7 +104,8 @@ export async function startTranscription(
   if (!m) throw new TranscriptionError("not_found", 404);
   if (!m.audio_key) throw new TranscriptionError("no_audio", 409);
   if (m.status === "transcribing") throw new TranscriptionError("busy", 409);
-  if (m.status === "done") throw new TranscriptionError("already_done", 409);
+  // again: transcribe a finished meeting once more (another provider); the current transcript is kept.
+  if (m.status === "done" && !options.again) throw new TranscriptionError("already_done", 409);
   if (!user.consents.includes(provider)) throw new TranscriptionError("no_consent", 403);
   const transcriber = deps.transcribers[provider];
   if ((m.audio_bytes ?? 0) > transcriber.maxBytes) throw new TranscriptionError("too_large", 413);
@@ -115,7 +116,7 @@ export async function startTranscription(
   if (key.source === "hosted" && seconds > (await hostedRemainingSeconds(deps))) throw new TranscriptionError("hosted_cap", 429);
 
   const token = randomToken();
-  if (!(await store.claimForTranscription(user.id, m.id, provider, key.source, await sha256Hex(token), options.language ?? null, deps.now()))) {
+  if (!(await store.claimForTranscription(user.id, m.id, provider, key.source, await sha256Hex(token), options.language ?? null, deps.now(), options.again === true))) {
     throw new TranscriptionError("busy", 409);
   }
   // Book the minutes before the call, so two transcriptions at once cannot both pass the cap.
@@ -183,7 +184,7 @@ export async function finishTranscript(deps: TranscriptionDeps, m: MeetingRow, t
     await fail(deps, m, new ProviderError("unprocessable", "empty transcript"));
     return false;
   }
-  await deps.store.finishMeeting(m.id, t);
+  await deps.store.finishMeeting(m.id, t, deps.now());
   if (m.usage_id) {
     const seconds = deps.convert === "client" ? Math.max(t.duration, estimateSeconds(m)) : t.duration || estimateSeconds(m);
     await deps.store.finalizeUsage(m.usage_id, Math.ceil(seconds));

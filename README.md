@@ -8,7 +8,7 @@ Record in-person meetings and get a transcript with each speaker's name, ready f
 - **iPhone recorder** (`ios/`): a small native app that keeps recording with the screen locked, during a call or in another app, and uploads when there is signal.
 - **Transcribe** with speakers told apart, using **Deepgram, AssemblyAI or OpenAI** with **your own key** (stored encrypted, never shown again). Transcripts use minuteca's own open format, the same for every provider.
 - **Name the voices**, fix which voice a block belongs to, search, play the audio from any line.
-- **Minutes with AI:** suggest each speaker's name and write the minutes from the transcript with **Claude, Gemini, ChatGPT, OpenRouter** or a **local model**, using your own key. Edit, copy, share or download them. Always labelled as AI-written.
+- **Minutes with AI:** suggest each speaker's name and write the minutes from the transcript with **Claude, Gemini, ChatGPT, OpenRouter** or a **local model**, using your own key. Compare models, edit any part by hand or ask the AI to change it (with undo), and optionally have names and minutes made on their own once a transcription finishes. Copy, share or download them. Always labelled as AI-written.
 - **Export** TXT, SRT and JSON and the audio, or **share with an AI app** (ChatGPT, Gemini...) to write the minutes. minuteca always says where the audio or text is going before it leaves.
 - **Light and dark**, on phones and computers. Recordings from the iPhone recorder are transcribed on their own once you have allowed your provider.
 - **Sign in** with an email link, only people on an access list. Everything is deleted after **30 days**.

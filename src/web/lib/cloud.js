@@ -77,8 +77,8 @@ export const updateMeetingMeta = (id, changes) => api(`/meetings/${id}`, { metho
 export const updateSpeakers = (id, utterances) => api(`/meetings/${id}`, { method: "PATCH", body: { speakers: utterances.map((u) => u.speaker) } });
 export const deleteMeeting = (id) => api(`/meetings/${id}`, { method: "DELETE" });
 export const removeMeetingAudio = (id) => api(`/meetings/${id}/audio`, { method: "DELETE" });
-export const startTranscription = (id, { provider, language } = {}) =>
-  api(`/meetings/${id}/transcribe`, { method: "POST", body: { provider, language: language || undefined } });
+export const startTranscription = (id, { provider, language, again } = {}) =>
+  api(`/meetings/${id}/transcribe`, { method: "POST", body: { provider, language: language || undefined, again: again || undefined } });
 export const audioUrl = (id) => `/api/meetings/${id}/audio`;
 
 export async function getAudioBlob(id) {

@@ -1,9 +1,16 @@
 import { useState } from "react";
 import { Check, KeyRound, Loader2, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
-import { LLM_IDS, llmConsentId } from "../lib/llm";
+import { LLM_IDS, llmConsentId, llmMissing } from "../lib/llm";
 import { useI18n } from "../i18n";
 import { useConfirm } from "./Confirm";
+import { useLlmConsent } from "./LlmConsent";
+
+/** What can run on its own once a transcription finishes (docs/design/automatic-minutes-and-revisions.md). */
+const AUTO_STEPS = [
+  ["names", "llmSettings.autoNames", "llmSettings.autoNamesHint"],
+  ["minutes", "llmSettings.autoMinutes", "llmSettings.autoMinutesHint"],
+];
 
 const input =
   "min-w-0 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200";
@@ -11,11 +18,12 @@ const input =
 /**
  * Language model for speaker names and minutes (docs/design/minutes-with-llm.md): the provider,
  * the person's own key for it (shared with transcription for OpenAI), the model, permission, and
- * their own instructions for the minutes.
+ * their own instructions for the minutes, and whether names and minutes are made on their own.
  */
 export default function LlmSettings({ me, onMeChange }) {
   const { t, locale } = useI18n();
   const confirm = useConfirm();
+  const { ensure, dialog } = useLlmConsent(me, onMeChange);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState("");
   const [instructions, setInstructions] = useState(me.llm?.instructions ?? "");
@@ -63,6 +71,14 @@ export default function LlmSettings({ me, onMeChange }) {
     if (v === current) return;
     run(`model:${id}`, () => api("/me/llm", { method: "PUT", body: { models: { [id]: v } } }));
   };
+  const auto = me.llm?.auto ?? [];
+  const defaultReady = !llmMissing(me);
+  // Turning a step on asks for permission for the default provider first: the step sends the transcript there.
+  const toggleAuto = async (step, on) => {
+    if (on && !(await ensure(me.llm.provider))) return;
+    const next = on ? [...auto, step] : auto.filter((s) => s !== step);
+    run(`auto:${step}`, () => api("/me/llm", { method: "PUT", body: { auto: next } }));
+  };
   const saveInstructions = async () => {
     if (await run("instructions", () => api("/me/llm", { method: "PUT", body: { instructions } }))) {
       setSaved(true);
@@ -76,6 +92,7 @@ export default function LlmSettings({ me, onMeChange }) {
         <Sparkles className="h-4 w-4 text-indigo-600" /> {t("llmSettings.title")}
       </h2>
       <p className="mt-1 text-sm text-slate-600">{t("llmSettings.hint")}</p>
+      <p className="mt-1 text-xs text-slate-500">{t("llmSettings.defaultHint")}</p>
       {error && <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
       <div role="radiogroup" aria-label={t("llmSettings.title")} className="mt-4 space-y-3">
@@ -101,6 +118,7 @@ export default function LlmSettings({ me, onMeChange }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-slate-900">{name}</span>
+                    {chosen && <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-medium text-white">{t("llmSettings.default")}</span>}
                     {!p.needsKey ? (
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">{t("llmSettings.noKeyNeeded")}</span>
                     ) : p.ownKey ? (
@@ -120,7 +138,7 @@ export default function LlmSettings({ me, onMeChange }) {
                     {t(`llmProviders.${id}.where`)} · {t(`llmProviders.${id}.privacy`)}
                   </p>
 
-                  {chosen && (
+                  {(chosen || !p.needsKey || p.ownKey) && (
                     <label className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
                       <span>{t("llmSettings.model")}</span>
                       <input
@@ -222,6 +240,33 @@ export default function LlmSettings({ me, onMeChange }) {
         </button>
       </div>
 
+      <fieldset className="mt-5 space-y-2">
+        <legend className="text-sm font-medium text-slate-800">{t("llmSettings.autoTitle")}</legend>
+        <p className="text-xs text-slate-500">
+          {defaultReady ? t("llmSettings.autoHint", { provider: t(`llmProviders.${me.llm.provider}.name`) }) : t("llmSettings.autoNeedsDefault")}
+        </p>
+        {AUTO_STEPS.map(([step, label, hint]) => {
+          const on = auto.includes(step);
+          return (
+            <label key={step} className={`flex items-start gap-3 rounded-xl border p-3 ${on ? "border-indigo-200 bg-indigo-50/60" : "border-slate-200"}`}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={busy !== null || (!defaultReady && !on)}
+                onChange={(e) => toggleAuto(step, e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-indigo-600"
+              />
+              <span className="min-w-0">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
+                  {t(label)} {busy === `auto:${step}` && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                </span>
+                <span className="block text-xs text-slate-500">{t(hint)}</span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+
       {me.llm?.usage?.length > 0 && (
         <p className="mt-4 text-xs text-slate-500">
           {t("llmSettings.usage")}{" "}
@@ -230,6 +275,7 @@ export default function LlmSettings({ me, onMeChange }) {
             .join(" · ")}
         </p>
       )}
+      {dialog}
     </section>
   );
 }

@@ -37,11 +37,17 @@ export interface LlmAdapter {
 }
 
 /** `region`: the provider refuses requests from where the server runs (Gemini and OpenAI block some countries). */
-export type LlmErrorCode = "invalid_key" | "model_not_found" | "refused" | "too_long" | "rate_limited" | "unavailable" | "timeout" | "empty_answer" | "region";
+/**
+ * rejected: the provider refused the request itself (a 4xx it does not explain otherwise, often a
+ * model that does not take an option). overloaded: the provider failed on its side (5xx).
+ * unavailable: no answer, or the answer broke off.
+ */
+export type LlmErrorCode = "invalid_key" | "model_not_found" | "refused" | "too_long" | "rate_limited" | "rejected" | "overloaded" | "unavailable" | "timeout" | "empty_answer" | "region";
 
 /**
- * Errors carry a code the app can show. The message (logged by the server) holds only the provider, the
- * HTTP status and the provider's error code: provider error bodies never reach people or logs.
+ * Errors carry a code the app can show. The message holds only the provider, the HTTP status and the
+ * provider's error type, so it is logged and also shown to the person as a detail they can pass on;
+ * provider error texts never reach people or logs.
  */
 export class LlmError extends Error {
   code: LlmErrorCode;
@@ -56,8 +62,9 @@ export function llmErrorFor(provider: string, status: number): LlmError {
   if (status === 404) return new LlmError("model_not_found", `${provider}: model not found`);
   if (status === 413) return new LlmError("too_long", `${provider}: input too long`);
   if (status === 429) return new LlmError("rate_limited", `${provider}: rate limited or out of credit`);
-  if (status >= 400 && status < 500) return new LlmError("unavailable", `${provider} refused the request (${status})`);
-  return new LlmError("unavailable", `${provider} answered ${status}`);
+  if (status >= 400 && status < 500) return new LlmError("rejected", `${provider} ${status}`);
+  if (status >= 500) return new LlmError("overloaded", `${provider} ${status}`);
+  return new LlmError("unavailable", `${provider} ${status}`);
 }
 
 export type Fetcher = typeof fetch;

@@ -7,10 +7,10 @@ import { audioKey, parseRange, rawKey, type FileRange, type Files, type StoredFi
 import { pickLanguage, t } from "./i18n.ts";
 import { isKeyVendor, plausibleKey, type KeyVault } from "./keys.ts";
 import { isLlmProvider, LLM_PROVIDERS, LlmError, MODEL_RE, type LlmAdapter, type LlmProviderId } from "./llm/llm.ts";
-import { generateMinutes, MinutesError, modelFor, suggestSpeakers, type MinutesDeps } from "./minutes.ts";
+import { autoMinutes, autoNames, generateMinutes, MinutesError, modelFor, reviseMinutes, suggestSpeakers, type MinutesDeps } from "./minutes.ts";
 import type { Limiter } from "./limits.ts";
 import type { Mail } from "./mail/mail.ts";
-import { isConsentId, monthOf, type MeetingRow, type MinutesRow, type Role, type Store, type User } from "./storage/store.ts";
+import { AUTO_STEPS, isAutoStep, isConsentId, monthOf, type MeetingRow, type MinutesRow, type Role, type Store, type TranscriptVersionRow, type User } from "./storage/store.ts";
 import {
   completeFromCallback,
   finishTranscript,
@@ -58,9 +58,29 @@ const SOURCES = new Set(["web", "import", "ios"]);
 const MAX_INSTRUCTIONS = 2000;
 const MAX_MINUTES = 200_000;
 
+export function transcriptVersionJson(v: TranscriptVersionRow) {
+  let speakerNames: Record<string, string> = {};
+  try {
+    speakerNames = JSON.parse(v.speaker_names) as Record<string, string>;
+  } catch {
+    speakerNames = {};
+  }
+  return { id: v.id, provider: v.provider, model: v.model, speakerNames, duration: v.duration, archivedAt: new Date(v.archived_at).toISOString() };
+}
+
 export function minutesJson(m: MinutesRow | null) {
   return m
-    ? { body: m.body, provider: m.provider, model: m.model, edited: Boolean(m.edited), createdAt: new Date(m.created_at).toISOString(), updatedAt: new Date(m.updated_at).toISOString() }
+    ? {
+        id: m.id,
+        body: m.body,
+        provider: m.provider,
+        model: m.model,
+        edited: Boolean(m.edited),
+        revisedWith: m.revised_with ?? null,
+        canUndo: Number(m.undo_count) > 0,
+        createdAt: new Date(m.created_at).toISOString(),
+        updatedAt: new Date(m.updated_at).toISOString(),
+      }
     : null;
 }
 /** D1 stores values of up to 2 MB; a 6 hour meeting is about 1 MB in our format. */
@@ -104,6 +124,8 @@ export function meetingJson(m: MeetingRow) {
     audioBytes: m.audio_bytes,
     provider: m.provider,
     keySource: m.key_source,
+    // Steps the app runs on its own once the transcript is here (docs/design/automatic-minutes-and-revisions.md).
+    autoPending: m.status === "done" ? AUTO_STEPS.filter((s) => (m.auto_pending ?? "").split(",").includes(s)) : [],
     createdAt: new Date(m.created_at).toISOString(),
     expiresAt: new Date(m.expires_at).toISOString(),
   };
@@ -288,6 +310,7 @@ export function createApp(deps: Deps) {
       llm: {
         provider: user.llmProvider,
         instructions: user.minutesInstructions,
+        auto: user.autoSteps,
         providers: LLM_PROVIDERS.filter((id) => deps.llm[id]).map((id) => {
           const adapter = deps.llm[id]!;
           const k = keys.find((x) => x.provider === id);
@@ -324,10 +347,11 @@ export function createApp(deps: Deps) {
     return c.json({ consents: [...new Set(next)] });
   });
 
-  /** Language model for names and minutes, a model per provider, and the person's instructions. */
+  /** Language model for names and minutes, a model per provider, the person's instructions and what runs on its own. */
   authed.put("/me/llm", async (c) => {
     const user = c.get("user");
-    const b = await body<{ provider: string | null; models: Record<string, unknown>; instructions: string }>(c);
+    const b = await body<{ provider: string | null; models: Record<string, unknown>; instructions: string; auto: unknown }>(c);
+    if (b.auto !== undefined && (!Array.isArray(b.auto) || !b.auto.every(isAutoStep))) return err(c, 400, "invalid_auto");
     let provider = user.llmProvider;
     if (b.provider === null) provider = null;
     else if (b.provider !== undefined) {
@@ -346,6 +370,7 @@ export function createApp(deps: Deps) {
     let instructions = user.minutesInstructions;
     if (typeof b.instructions === "string") instructions = b.instructions.trim().slice(0, MAX_INSTRUCTIONS);
     await store.setLlmSettings(user.id, { provider, models, instructions });
+    if (Array.isArray(b.auto)) await store.setAutoSteps(user.id, b.auto.filter(isAutoStep));
     return c.json({ ok: true });
   });
 
@@ -421,7 +446,11 @@ export function createApp(deps: Deps) {
     }
     // The transcript goes out as stored, without parsing it again (CPU-limited hosts).
     const transcript = m.status === "done" ? await store.transcriptText(m.id) : null;
-    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(await store.minutes(m.id)) });
+    const versions = await store.minutesList(m.id);
+    // minutes: the newest version (what most screens show); minutesVersions: all of them, newest first.
+    // transcriptVersions: earlier transcripts, without their text (it can be large).
+    const transcriptVersions = (await store.transcriptVersions(m.id)).map(transcriptVersionJson);
+    const head = JSON.stringify({ ...meetingJson(m), minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson), transcriptVersions });
     return new Response(`${head.slice(0, -1)},"transcript":${transcript ?? "null"}}`, { headers: { "Content-Type": "application/json; charset=utf-8" } });
   });
 
@@ -509,13 +538,13 @@ export function createApp(deps: Deps) {
 
   authed.post("/meetings/:id/transcribe", async (c) => {
     const user = c.get("user");
-    const b = await body<{ provider: string; language: string }>(c);
+    const b = await body<{ provider: string; language: string; again: boolean }>(c);
     const provider = b.provider === undefined ? user.provider : b.provider;
     if (!isProvider(provider)) return err(c, 400, "invalid_provider");
     let language = typeof b.language === "string" && LANGUAGE_RE.test(b.language) ? b.language : undefined;
     if (language === "multi" && provider !== "deepgram") language = undefined;
     try {
-      const m = await startTranscription(tdeps, user, c.req.param("id") ?? "", { provider, language });
+      const m = await startTranscription(tdeps, user, c.req.param("id") ?? "", { provider, language, again: b.again === true });
       return c.json(meetingJson(m));
     } catch (e) {
       if (e instanceof TranscriptionError) return err(c, e.status, e.code);
@@ -544,6 +573,22 @@ export function createApp(deps: Deps) {
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
+  /** Brings an earlier transcript back (with its voice names); the current one becomes a version. */
+  authed.post("/meetings/:id/transcripts/:version/use", async (c) => {
+    const m = await ownMeeting(c);
+    const id = Number(c.req.param("version"));
+    if (!m || !Number.isSafeInteger(id) || id <= 0) return err(c, 404, "not_found");
+    if (!(await store.useTranscriptVersion(m.id, id, deps.now()))) return err(c, 404, "not_found");
+    return c.json(meetingJson((await ownMeeting(c))!));
+  });
+
+  authed.delete("/meetings/:id/transcripts/:version", async (c) => {
+    const m = await ownMeeting(c);
+    const id = Number(c.req.param("version"));
+    if (!m || !Number.isSafeInteger(id) || id <= 0 || !(await store.deleteTranscriptVersion(m.id, id))) return err(c, 404, "not_found");
+    return c.json({ ok: true });
+  });
+
   /**
    * A transcript made on the person's computer by the desktop app (ADR 0005). Nothing is paid or sent
    * to a provider, so no permission or key applies; the audio must be here and no cloud job running.
@@ -557,7 +602,7 @@ export function createApp(deps: Deps) {
     if (!isTranscript(t) || (t.provider as string) !== "local" || t.blocks.length > 50_000 || (!t.blocks.length && !t.duration)) {
       return err(c, 400, "invalid_transcript");
     }
-    await store.finishLocal(m.id, t);
+    await store.finishLocal(m.id, t, deps.now());
     return c.json(meetingJson((await ownMeeting(c))!));
   });
 
@@ -571,9 +616,10 @@ export function createApp(deps: Deps) {
       } catch (e) {
         if (e instanceof MinutesError) return err(c, e.status, e.code);
         if (e instanceof LlmError) {
-          // Provider, HTTP status and the provider's error code only (see LlmError).
+          // Provider, HTTP status and the provider's error type only (see LlmError): logged, and
+          // shown as a detail the person can pass on.
           console.error("llm", e.code, e.message);
-          return err(c, 502, `llm_${e.code}`);
+          return c.json({ error: `llm_${e.code}`, detail: e.message }, 502);
         }
         console.error("llm route", (e as Error).message);
         return err(c, 500, "generic");
@@ -582,23 +628,78 @@ export function createApp(deps: Deps) {
     return keepAlive(work);
   };
 
-  authed.post("/meetings/:id/speakers/suggest", (c) =>
-    llmRoute(c, async () => c.json(await suggestSpeakers(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang")))),
-  );
+  // { provider } picks a configured model other than the default for this one generation.
+  // { auto: true } runs the meeting's pending automatic step instead, once (answers { skipped: true } if it is not pending).
+  authed.post("/meetings/:id/speakers/suggest", async (c) => {
+    const { provider, auto } = await body<{ provider: unknown; auto: unknown }>(c);
+    const id = c.req.param("id") ?? "";
+    if (auto === true) return llmRoute(c, async () => c.json(await autoNames(mdeps, c.get("user"), id, c.get("lang"))));
+    return llmRoute(c, async () => c.json(await suggestSpeakers(mdeps, c.get("user"), id, c.get("lang"), provider)));
+  });
 
-  authed.post("/meetings/:id/minutes", (c) =>
-    llmRoute(c, async () => c.json(minutesJson(await generateMinutes(mdeps, c.get("user"), c.req.param("id") ?? "", c.get("lang"))))),
-  );
+  authed.post("/meetings/:id/minutes", async (c) => {
+    const { provider, auto } = await body<{ provider: unknown; auto: unknown }>(c);
+    const id = c.req.param("id") ?? "";
+    if (auto === true) {
+      return llmRoute(c, async () => {
+        const r = await autoMinutes(mdeps, c.get("user"), id, c.get("lang"));
+        return c.json("skipped" in r ? r : minutesJson(r));
+      });
+    }
+    return llmRoute(c, async () => c.json(minutesJson(await generateMinutes(mdeps, c.get("user"), id, c.get("lang"), provider))));
+  });
 
+  /** Stops what is left of the automatic steps for this meeting. */
+  authed.delete("/meetings/:id/auto", async (c) => {
+    const m = await ownMeeting(c);
+    if (!m) return err(c, 404, "not_found");
+    await store.clearAutoSteps(m.user_id, m.id);
+    return c.json({ ok: true });
+  });
+
+  const versionId = (v: unknown) => (Number.isSafeInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+
+  /** Changes a version as the person asks, all of it or one part ({ instruction, part?, provider? }). */
+  authed.post("/meetings/:id/minutes/:version/revise", async (c) => {
+    const id = versionId(c.req.param("version"));
+    if (!id) return err(c, 404, "not_found");
+    const b = await body<{ instruction: unknown; part: unknown; provider: unknown }>(c);
+    return llmRoute(c, async () => c.json(minutesJson(await reviseMinutes(mdeps, c.get("user"), c.req.param("id") ?? "", id, c.get("lang"), b))));
+  });
+
+  /** Brings back the text before the last change (by hand or on request). */
+  authed.post("/meetings/:id/minutes/:version/undo", async (c) => {
+    const m = await ownMeeting(c);
+    const id = versionId(c.req.param("version"));
+    if (!m || !id) return err(c, 404, "not_found");
+    const outcome = await store.undoMinutes(m.id, id, deps.now());
+    if (outcome === "not_found") return err(c, 404, "not_found");
+    if (outcome === "changed") return err(c, 409, "minutes_changed");
+    return c.json(minutesJson(await store.minutes(m.id, id)));
+  });
+
+  /** Edits one version ({ id }), or the newest when no id is given. */
   authed.put("/meetings/:id/minutes", async (c) => {
     const m = await ownMeeting(c);
     if (!m) return err(c, 404, "not_found");
-    const text = (await body<{ body: string }>(c)).body;
-    if (typeof text !== "string" || !text.trim() || text.length > MAX_MINUTES) return err(c, 400, "invalid_minutes");
-    if (!(await store.editMinutes(m.id, text, deps.now()))) return err(c, 404, "not_found");
-    return c.json(minutesJson(await store.minutes(m.id)));
+    const b = await body<{ body: string; id: unknown }>(c);
+    if (typeof b.body !== "string" || !b.body.trim() || b.body.length > MAX_MINUTES) return err(c, 400, "invalid_minutes");
+    const target = b.id === undefined ? (await store.minutes(m.id))?.id : versionId(b.id);
+    const outcome = target ? await store.editMinutes(m.id, target, b.body, deps.now()) : "not_found";
+    if (outcome === "not_found") return err(c, 404, "not_found");
+    if (outcome === "changed") return err(c, 409, "minutes_changed");
+    return c.json(minutesJson(await store.minutes(m.id, target!)));
   });
 
+  authed.delete("/meetings/:id/minutes/:version", async (c) => {
+    const m = await ownMeeting(c);
+    const id = versionId(c.req.param("version"));
+    if (!m || !id) return err(c, 404, "not_found");
+    await store.deleteMinutes(m.id, id);
+    return c.json({ ok: true });
+  });
+
+  /** All versions. */
   authed.delete("/meetings/:id/minutes", async (c) => {
     const m = await ownMeeting(c);
     if (!m) return err(c, 404, "not_found");
@@ -614,14 +715,16 @@ export function createApp(deps: Deps) {
     // Transcripts are spliced in as stored text, so the export never parses them (CPU-limited hosts).
     const parts: string[] = [];
     for (const m of meetings) {
-      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(await store.minutes(m.id)) });
-      parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"}}`);
+      const versions = await store.minutesList(m.id);
+      const head = JSON.stringify({ ...meetingJson(m), audioUrl: m.audio_key ? `/api/meetings/${m.id}/audio` : null, minutes: minutesJson(versions[0] ?? null), minutesVersions: versions.map(minutesJson) });
+      const earlier = await store.transcriptVersionsText(m.id);
+      parts.push(`${head.slice(0, -1)},"transcript":${(await store.transcriptText(m.id)) ?? "null"},"earlierTranscripts":[${earlier.join(",")}]}`);
     }
     const data = JSON.stringify({
       format: "minuteca-export",
       version: 1,
       exportedAt: new Date(deps.now()).toISOString(),
-      account: { email: user.email, role: user.role, provider: user.provider, consents: user.consents, languageModel: user.llmProvider, minutesInstructions: user.minutesInstructions, keys: (await store.providerKeys(user.id)).map((k) => ({ provider: k.provider, last4: k.last4 })) },
+      account: { email: user.email, role: user.role, provider: user.provider, consents: user.consents, languageModel: user.llmProvider, minutesInstructions: user.minutesInstructions, automatic: user.autoSteps, keys: (await store.providerKeys(user.id)).map((k) => ({ provider: k.provider, last4: k.last4 })) },
       usage: await store.usageOf(user.id),
       languageModelUsage: await store.llmUsageOf(user.id),
       meetings: [],

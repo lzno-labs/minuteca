@@ -87,3 +87,54 @@ export function toFloat32(samples: Int16Array): Float32Array {
 /** Errors the web shows (errors.<code> in locales); anything unknown becomes "generic". */
 export const LOCAL_ERRORS = new Set(["cancelled", "signed_out", "network", "decode_failed", "models_failed", "engine_failed", "not_ready", "not_found", "invalid_transcript", "too_many", "mail_failed", "invalid_email"]);
 export const errorCode = (code: unknown): string => (typeof code === "string" && LOCAL_ERRORS.has(code) ? code : "generic");
+
+/* ---------- updates on Mac without a Developer ID (docs/adr/0008) ---------- */
+
+/** Release files are downloaded from here, by the fixed names electron-builder.yml gives them. */
+export const RELEASE_DOWNLOADS = "https://github.com/lzno-labs/minuteca/releases/download";
+
+export interface FeedFile {
+  url: string;
+  sha512: string;
+  size?: number;
+}
+
+/** The update archive for this Mac (Apple or Intel chip) in latest-mac.yml, or null. */
+export function macArchive(files: readonly FeedFile[] | undefined, arch: string): FeedFile | null {
+  const name = `minuteca-mac-${arch === "arm64" ? "arm64" : "x64"}.zip`;
+  return files?.find((f) => f.url === name && typeof f.sha512 === "string") ?? null;
+}
+
+/** Where to download a release file, only for plain version numbers and the archive names above. */
+export function releaseFileUrl(version: string, file: string): string | null {
+  if (!/^\d+\.\d+\.\d+$/.test(version) || !/^minuteca-mac-(arm64|x64)\.zip$/.test(file)) return null;
+  return `${RELEASE_DOWNLOADS}/v${version}/${file}`;
+}
+
+/** The .app bundle around this executable (…/minuteca.app/Contents/MacOS/minuteca), or null. */
+export function bundleOf(execPath: string): string | null {
+  return /^(\/.+\.app)\/Contents\/MacOS\/[^/]+$/.exec(execPath)?.[1] ?? null;
+}
+
+/**
+ * Whether the app may replace itself there: not while it runs from the disk image, nor from the
+ * read-only copy macOS makes of an app that was never moved out of Downloads (App Translocation).
+ */
+export function replaceable(bundle: string): boolean {
+  return !bundle.startsWith("/Volumes/") && !bundle.includes("/AppTranslocation/");
+}
+
+/**
+ * Runs after the app quits (detached): swaps the checked new bundle in, keeps the old one if the
+ * swap fails, and opens the app again when asked. Takes PID, APP, NEXT, WORK and REOPEN from the
+ * environment, so no path is ever pasted into the script.
+ */
+export const SWAP_SCRIPT = `
+while kill -0 "$PID" 2>/dev/null; do sleep 0.2; done
+OLD="$WORK/previous.app"
+if mv "$APP" "$OLD"; then
+  if mv "$NEXT" "$APP"; then rm -rf "$WORK"; else mv "$OLD" "$APP"; fi
+fi
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null
+if [ "$REOPEN" = "1" ]; then open "$APP"; fi
+`;

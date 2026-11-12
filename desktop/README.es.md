@@ -37,9 +37,11 @@ npm run local:transcribe -- ~/Downloads/reunion.m4a --compare ~/Downloads/reunio
 - Los modelos se descargan una vez (unos 700 MB, versiones fijas en Hugging Face, verificados con SHA-256) en `~/.cache/minuteca/models`; la app usa la misma carpeta.
 - Guarda `reunion.local.txt` y `reunion.local.json` junto al audio. `--compare` dice qué tanto se parecen las palabras y las voces.
 - `--threshold`: bájalo (0,4) si dos personas salieron como una sola voz; súbelo (0,6) si una persona salió como varias.
+- `--model`: `parakeet-v3` (el predeterminado), `whisper-turbo`, `whisper-small` o `whisper-base`. En la app, Ajustes muestra los mismos modelos con una recomendación según la computadora (ADR 0007).
 
 ## Modelos y créditos
 
 - NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0): voz a texto en 25 idiomas, entre ellos el español.
+- OpenAI Whisper large-v3 turbo, small y base (MIT), opcionales, exportados a ONNX por el proyecto sherpa-onnx.
 - pyannote segmentation 3.0 (MIT) y WeSpeaker ResNet34-LM entrenado con VoxCeleb (CC-BY-4.0): para distinguir voces.
 - Todo corre con [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) dentro de [Electron](https://www.electronjs.org) (MIT).

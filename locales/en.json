@@ -546,7 +546,10 @@
     "save": "Saving the transcript…",
     "cancel": "Cancel",
     "cancelled": "The transcription was cancelled.",
-    "failed": "Could not transcribe on this computer: {reason}"
+    "failed": "Could not transcribe on this computer: {reason}",
+    "explainModel": "With {model}. The audio is transcribed here, without sending it to any AI provider and at no cost.",
+    "firstDownload": "The model downloads first, only once ({size} MB).",
+    "changeModel": "Change model"
   },
   "download": {
     "title": "minuteca for your computer",
@@ -606,5 +609,30 @@
     "namesNone": "The AI found no certain names. You can add them in Transcript.",
     "minutesDone": "The minutes are ready. Check them before sending.",
     "failed": "Could not finish on its own: {reason} You can go on with the buttons."
+  },
+  "localModels": {
+    "title": "Transcribe on this computer",
+    "hint": "These models run on this computer: the audio goes to no AI provider and costs nothing. Choose one; it downloads only once.",
+    "computer": "This computer: {memory} GB of memory, {cores} cores",
+    "recommended": "Recommended",
+    "downloaded": "Downloaded",
+    "size": "{size} MB",
+    "speed": "About {minutes} min for each hour of audio",
+    "slow": "Slow on this computer: about {minutes} min for each hour of audio",
+    "tooBig": "Needs {memory} GB of memory; this computer has less and it may be very slow",
+    "use": "Use {model}",
+    "download": "Download ({size} MB)",
+    "downloading": "Downloading: {done} of {total} MB",
+    "delete": "Delete",
+    "deleteTitle": "Delete {model} from this computer?",
+    "deleteBody": "This frees the space. If you use it again, it downloads again.",
+    "failed": "Could not do it: {reason}",
+    "credits": "Credits: {credits}.",
+    "describe": {
+      "parakeet-v3": "The most accurate and the fastest in our Spanish tests. Understands 25 European languages.",
+      "whisper-turbo": "Large, optimized Whisper: usually copes better with a noisy room and detects the language. Slower and heavier.",
+      "whisper-small": "Medium Whisper: lighter, somewhat less accurate.",
+      "whisper-base": "Light Whisper, for computers with little memory. Less accurate."
+    }
   }
 }

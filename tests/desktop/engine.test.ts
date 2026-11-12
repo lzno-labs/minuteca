@@ -1,13 +1,14 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import {
-  SAMPLE_RATE, parseWav, quietestPoint, s16leToFloat, sentencesFrom, splitLong, toBlocks, windowsFrom,
+  SAMPLE_RATE, mostFrequent, parseWav, quietestPoint, s16leToFloat, sentencesFrom, splitLong, spreadSentences, toBlocks, windowsFrom,
 } from "../../desktop/engine/blocks.ts";
 import { compare, parseTxt, readReference, speakerAgreement, wordErrorRate, words } from "../../desktop/engine/compare.ts";
-import { MODEL_FILES, ensureModels } from "../../desktop/engine/models.ts";
+import { MODEL_FILES, SPEAKER_FILES, SPEECH_MODELS, deleteSpeechModel, downloadedModels, ensureModels, filesFor, modelName, speechModel } from "../../desktop/engine/models.ts";
+import { assess, catalog, recommended, threadsFor } from "../../desktop/engine/recommend.ts";
 import { type Engine, transcribe } from "../../desktop/engine/pipeline.ts";
 import { isTranscript } from "../../src/server/transcriber/transcriber.ts";
 
@@ -177,5 +178,74 @@ describe("models", () => {
     const bad = (async () => new Response("TOKENS", { status: 200 })) as unknown as typeof fetch;
     await expect(ensureModels(dir, { files, fetcher: bad })).rejects.toThrow("checksum");
     await expect(stat(join(dir, "a/tokens.txt.part"))).rejects.toThrow();
+  });
+});
+
+describe("choosing a local speech model (ADR 0007)", () => {
+  let dir = "";
+  afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  it("lists Parakeet first and three Whisper sizes, each pinned, with the shared speaker models", () => {
+    expect(SPEECH_MODELS.map((m) => m.id)).toEqual(["parakeet-v3", "whisper-turbo", "whisper-small", "whisper-base"]);
+    for (const m of SPEECH_MODELS) {
+      const files = filesFor(m.id);
+      expect(files.slice(-2)).toEqual([...SPEAKER_FILES]);
+      for (const f of m.files) {
+        expect(f.name.startsWith(`${m.folder}/`)).toBe(true);
+        expect(f.url).toMatch(/^https:\/\/huggingface\.co\/csukuangfj\/[^/]+\/resolve\/[0-9a-f]{40}\//);
+        expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+      }
+    }
+    expect(MODEL_FILES).toEqual(filesFor("parakeet-v3"));
+    expect(modelName("whisper-turbo")).toBe("whisper-large-v3-turbo-int8+pyannote-segmentation-3.0+wespeaker-resnet34-lm");
+    expect(speechModel("../../etc")).toBeNull();
+  });
+
+  it("recommends from memory and estimates the time per hour of audio", () => {
+    expect(recommended({ memoryGb: 4, cores: 4 })).toBe("whisper-base");
+    expect(recommended({ memoryGb: 16, cores: 10 })).toBe("parakeet-v3");
+    const turbo = SPEECH_MODELS.find((m) => m.id === "whisper-turbo")!;
+    expect(assess(turbo, { memoryGb: 16, cores: 5 })).toEqual({ fit: "ok", minutesPerHour: 26 });
+    expect(assess(turbo, { memoryGb: 8, cores: 5 }).fit).toBe("too_big");
+    expect(assess(turbo, { memoryGb: 16, cores: 2 })).toEqual({ fit: "slow", minutesPerHour: 103 });
+    const list = catalog({ memoryGb: 16, cores: 9 }, ["whisper-base"]);
+    expect(list.find((m) => m.recommended)?.id).toBe("parakeet-v3");
+    expect(list.find((m) => m.id === "whisper-base")).toMatchObject({ downloaded: true, size: 160_609_290 });
+    expect(threadsFor(64)).toBe(8);
+  });
+
+  it("knows what is downloaded and deletes one model, keeping the shared ones", async () => {
+    dir = await mkdtemp(join(tmpdir(), "minuteca-models-"));
+    const place = async (f: { name: string; size: number; sha256: string }) => {
+      await mkdir(join(dir, f.name, ".."), { recursive: true });
+      await truncate(await writeFile(join(dir, f.name), "").then(() => join(dir, f.name)), f.size);
+      await writeFile(join(dir, `${f.name}.sha256`), `${f.sha256}\n`);
+    };
+    for (const f of filesFor("whisper-base")) await place(f);
+    expect(await downloadedModels(dir)).toEqual(["whisper-base"]);
+    await deleteSpeechModel(dir, "whisper-base");
+    expect(await downloadedModels(dir)).toEqual([]);
+    expect((await stat(join(dir, SPEAKER_FILES[0]!.name))).size).toBe(SPEAKER_FILES[0]!.size);
+  });
+
+  it("spreads Whisper's sentences over the window, and keeps the language heard most", () => {
+    const s = sentencesFrom({ text: " Hola a todos. ¿Empezamos? Sí.", tokens: ["Hola"], timestamps: [] }, 10, 6);
+    expect(s.map((x) => x.text)).toEqual(["Hola a todos.", "¿Empezamos?", "Sí."]);
+    expect(s[0]!.start).toBe(10);
+    expect(s.at(-1)!.end).toBe(16);
+    expect(spreadSentences("", 0, 5)).toEqual([]);
+    expect(mostFrequent(["es", "<|es|>", "en", undefined, ""])).toBe("es");
+    expect(mostFrequent([undefined])).toBeNull();
+  });
+
+  it("names the model and the language in the transcript", () => {
+    const engine: Engine = {
+      name: modelName("whisper-small"),
+      diarize: () => [seg(0, 0, 2), seg(1, 2, 4)],
+      recognize: () => ({ text: "Buenos días.", tokens: [], timestamps: [], lang: "es" }),
+    };
+    const t = transcribe(engine, new Float32Array(SAMPLE_RATE * 4));
+    expect(t).toMatchObject({ model: modelName("whisper-small"), language: "es" });
+    expect(t.blocks[0]!.sentences![0]).toMatchObject({ start: 0, end: 2, text: "Buenos días." });
   });
 });

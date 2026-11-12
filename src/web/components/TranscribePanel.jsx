@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, KeyRound, Laptop, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
 import { api, messageFor } from "../lib/api";
-import { desktopBridge, progressText } from "../lib/desktop";
+import { chosenLocalModel, desktopBridge, hasLocalModels, progressText } from "../lib/desktop";
 import { startTranscription } from "../lib/cloud";
 import { AUDIO_LANGUAGES } from "../lib/browser";
 import { keySource, PROVIDER_IDS, usableProvider } from "../lib/providers";
@@ -32,7 +32,14 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(null);
+  const [localModels, setLocalModels] = useState(null);
   const local = provider === "local";
+  // Which local model will run, and whether it downloads first (desktop app 0.1.2 and later).
+  useEffect(() => {
+    if (local && hasLocalModels(bridge)) bridge.models().then((d) => setLocalModels(d.models), () => {});
+  }, [local, bridge]);
+  const localModelId = localModels ? chosenLocalModel(localModels, settings?.localModel) : null;
+  const localModel = localModels?.find((m) => m.id === localModelId) ?? null;
   const source = local ? "local" : keySource(me, provider);
   const name = t(`providers.${provider}.name`);
   const languageLabel = t(`audioLanguages.${AUDIO_LANGUAGES.find((l) => l.value === language)?.key ?? "auto"}`);
@@ -55,7 +62,7 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
     setError(null);
     setProgress(null);
     try {
-      await bridge.transcribe(meeting.id, (p) => setProgress(p));
+      await bridge.transcribe(meeting.id, (p) => setProgress(p), { model: localModelId ?? undefined });
       onStarted?.();
     } catch (err) {
       setError(err?.code === "cancelled" ? t("local.cancelled") : t("local.failed", { reason: messageFor(err?.code || "generic", 0) }));
@@ -175,7 +182,17 @@ export default function TranscribePanel({ meeting, me, onMeChange, onStarted, on
             <Laptop className="h-4 w-4" />
             {t("local.start")}
           </button>
-          <p className="text-xs leading-relaxed text-slate-500">{t("local.explain")}</p>
+          {localModel ? (
+            <p className="text-xs leading-relaxed text-slate-500">
+              {t("local.explainModel", { model: localModel.name })}{" "}
+              {!localModel.downloaded && t("local.firstDownload", { size: Math.round(localModel.size / 1e6) })}{" "}
+              <button type="button" onClick={onOpenSettings} className="font-medium text-indigo-700 hover:underline">
+                {t("local.changeModel")}
+              </button>
+            </p>
+          ) : (
+            <p className="text-xs leading-relaxed text-slate-500">{t("local.explain")}</p>
+          )}
         </>
       ) : source ? (
         <>

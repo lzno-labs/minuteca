@@ -11,11 +11,12 @@ import es from "../locales/es.json" with { type: "json" };
 import { decodeAudio } from "./engine/audio.ts";
 import { SAMPLE_RATE } from "./engine/blocks.ts";
 import { compare, readReference } from "./engine/compare.ts";
-import { CREDITS, defaultModelsDir, ensureModels } from "./engine/models.ts";
+import { CREDITS, DEFAULT_SPEECH, defaultModelsDir, ensureModels, filesFor, SPEECH_MODELS, speechModel } from "./engine/models.ts";
 import { type LocalTranscript, transcribe } from "./engine/pipeline.ts";
 import { DEFAULT_THRESHOLD, sherpaEngine } from "./engine/sherpa.ts";
 
-const USAGE = "usage: npm run local:transcribe -- <audio> [--compare <file.txt|file.json>] [--threshold 0.5] [--models <dir>] [--threads N]\n" +
+const USAGE = "usage: npm run local:transcribe -- <audio> [--model parakeet-v3] [--compare <file.txt|file.json>] [--threshold 0.5] [--models <dir>] [--threads N]\n" +
+  `  --model: ${SPEECH_MODELS.map((m) => m.id).join(", ")} (default ${DEFAULT_SPEECH})\n` +
   "  --threshold: lower (0.4) if two people came out as one voice, higher (0.6) if one person came out as several";
 
 const clock = (s: number) => {
@@ -37,6 +38,7 @@ async function main() {
     allowPositionals: true,
     options: {
       threshold: { type: "string" },
+      model: { type: "string" },
       compare: { type: "string" },
       models: { type: "string" },
       threads: { type: "string" },
@@ -55,7 +57,10 @@ async function main() {
   if (!(threshold > 0 && threshold < 1)) throw new Error("--threshold must be between 0 and 1, for example 0.5");
   const threads = values.threads ? Number(values.threads) : Math.min(8, availableParallelism());
 
+  const model = speechModel(values.model ?? DEFAULT_SPEECH);
+  if (!model) throw new Error(`--model must be one of: ${SPEECH_MODELS.map((m) => m.id).join(", ")}`);
   const dir = await ensureModels(values.models ? here(values.models) : defaultModelsDir(), {
+    files: filesFor(model.id),
     onProgress: (done, total) => status(`Downloading models (once): ${Math.round(done / 1e6)} of ${Math.round(total / 1e6)} MB`),
   });
   status("Reading audio...");
@@ -63,7 +68,7 @@ async function main() {
   const seconds = samples.length / SAMPLE_RATE;
   const started = performance.now();
   status(`Separating voices in ${clock(seconds)} of audio...`);
-  const t = transcribe(sherpaEngine(dir, threads), samples, threshold, {
+  const t = transcribe(sherpaEngine(dir, threads, undefined, model.id), samples, threshold, {
     separated: (voices) => status(`Found ${voices} voices. Transcribing...`),
     recognized: (done, total) => status(`Transcribing: ${done} of ${total} turns`),
   });

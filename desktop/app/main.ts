@@ -7,6 +7,9 @@ import en from "../../locales/en.json" with { type: "json" };
 import es from "../../locales/es.json" with { type: "json" };
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { availableParallelism, cpus, totalmem } from "node:os";
+import { CREDITS, speechModel } from "../engine/models.ts";
+import { catalog } from "../engine/recommend.ts";
 import { accessToken, challengeOf, DEFAULT_SERVER, errorCode, externalAllowed, isMeetingId, linkInArgs, newVerifier, sameOrigin, serverOrigin } from "./core.ts";
 
 /** Set by build.mjs: true only for Mac builds with a Developer ID signature, which macOS lets update themselves. */
@@ -176,18 +179,57 @@ function ask(worker: UtilityProcess, message: unknown, progress: (p: unknown) =>
   });
 }
 
-ipcMain.handle("desktop:transcribe", async (e, meetingId: unknown) => {
+const forkEngine = () => utilityProcess.fork(join(__dirname, "engine-worker.cjs"), [], { serviceName: "minuteca-engine" });
+
+/** This computer and the local speech models (ADR 0007): what fits, what is here, what we recommend. */
+ipcMain.handle("desktop:models", async (e) => {
+  if (!fromServer(e)) return { error: "generic" };
+  const specs = { memoryGb: Math.round((totalmem() / 2 ** 30) * 10) / 10, cores: availableParallelism() };
+  const worker = forkEngine();
+  try {
+    const downloaded = (await ask(worker, { type: "downloaded" }, () => {})) as string[];
+    return { value: { specs: { ...specs, cpu: cpus()[0]?.model?.trim() ?? "" }, models: catalog(specs, downloaded), credits: CREDITS, busy: Boolean(job) } };
+  } catch {
+    return { error: "engine_failed" };
+  } finally {
+    worker.kill();
+  }
+});
+
+/** Downloads (or deletes) one speech model; one engine job at a time, cancelled like a transcription. */
+ipcMain.handle("desktop:model", async (e, action: unknown, id: unknown) => {
+  if (!fromServer(e)) return { error: "generic" };
+  if (!speechModel(id) || (action !== "download" && action !== "delete")) return { error: "not_found" };
+  if (job) return { error: "not_ready" };
+  const progress = (p: unknown) => e.sender.isDestroyed() || e.sender.send("desktop:progress", p);
+  const worker = forkEngine();
+  job = { worker, cancelled: false };
+  try {
+    await ask(worker, { type: action === "download" ? "models" : "delete", model: id }, progress);
+    return { value: true };
+  } catch (err) {
+    if (job?.cancelled) return { error: "cancelled" };
+    return { error: errorCode((err as { code?: string }).code) };
+  } finally {
+    worker.kill();
+    job = null;
+  }
+});
+
+ipcMain.handle("desktop:transcribe", async (e, meetingId: unknown, options: unknown) => {
   if (!fromServer(e)) return { error: "generic" };
   if (!isMeetingId(meetingId)) return { error: "not_found" };
   if (job) return { error: "not_ready" };
   if (!token) return { error: "signed_out" };
+  // The model the person chose in Settings; the engine accepts only ids from its catalog.
+  const model = speechModel((options as { model?: unknown } | undefined)?.model)?.id;
   const progress = (p: unknown) => e.sender.isDestroyed() || e.sender.send("desktop:progress", p);
-  const worker = utilityProcess.fork(join(__dirname, "engine-worker.cjs"), [], { serviceName: "minuteca-engine" });
+  const worker = forkEngine();
   job = { worker, cancelled: false };
   const awake = powerSaveBlocker.start("prevent-app-suspension");
   try {
     progress({ step: "models" });
-    await ask(worker, { type: "models" }, progress);
+    await ask(worker, { type: "models", model }, progress);
     progress({ step: "audio" });
     const audio = await api(`/meetings/${meetingId}/audio`);
     if (audio.status === 401) return { error: "signed_out" };
@@ -198,7 +240,7 @@ ipcMain.handle("desktop:transcribe", async (e, meetingId: unknown) => {
     const samples = await decode(bytes);
     if (job.cancelled) return { error: "cancelled" };
     progress({ step: "voices" });
-    const transcript = await ask(worker, { type: "transcribe", samples }, progress);
+    const transcript = await ask(worker, { type: "transcribe", samples, model }, progress);
     progress({ step: "save" });
     const saved = await api(`/meetings/${meetingId}/transcript/local`, { method: "PUT", body: JSON.stringify({ transcript }) });
     if (!saved.ok) return { error: errorCode(((await saved.json().catch(() => ({}))) as { error?: string }).error) };

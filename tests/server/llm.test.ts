@@ -2,10 +2,10 @@ import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "../../src/server/llm/anthropic.ts";
-import { gemini, thinkingLevel } from "../../src/server/llm/gemini.ts";
-import { LlmError } from "../../src/server/llm/llm.ts";
+import { gemini, GEMINI_FALLBACKS, thinkingLevel } from "../../src/server/llm/gemini.ts";
+import { llmCall, LlmError } from "../../src/server/llm/llm.ts";
 import { localChat, openaiChat, openrouter } from "../../src/server/llm/openai-chat.ts";
-import { firstJsonObject, parseSuggestions, transcriptLines } from "../../src/server/minutes.ts";
+import { contentLanguage, firstJsonObject, parseSuggestions, transcriptLines } from "../../src/server/minutes.ts";
 import { keepAlive } from "../../src/server/app.ts";
 import { transcript } from "./helpers.ts";
 
@@ -186,6 +186,40 @@ describe("Gemini adapter", () => {
     await expect(gemini(always).complete({ ...req, effort: "low" }, { apiKey: "g", model: "gemini-3.5-pro" })).rejects.toMatchObject({ code: "rejected", message: "gemini 400 INVALID_ARGUMENT" });
   });
 
+  it("moves to a lighter model when Google turns the chosen one away, and says which one wrote", async () => {
+    const asked: string[] = [];
+    const busy = { error: { code: 503, status: "UNAVAILABLE", message: "This model is currently experiencing high demand." } };
+    const fetcher = (async (url: string) => {
+      const model = decodeURIComponent(/models\/([^:]+):/.exec(url)![1]!);
+      asked.push(model);
+      if (model === "gemini-3.8-flash") return new Response(JSON.stringify(busy), { status: 503 });
+      // The first light model breaks off before any text; the next one answers.
+      if (model === GEMINI_FALLBACKS[0]) return sse([{ error: { status: "UNAVAILABLE", code: 503 } }]);
+      return sse([{ candidates: [{ content: { parts: [{ text: "Minuta" }] }, finishReason: "STOP" }], modelVersion: model }]);
+    }) as unknown as typeof fetch;
+    const r = await gemini(fetcher).complete({ ...req, effort: "medium" }, { apiKey: "g", model: "gemini-3.8-flash" });
+    expect(asked).toEqual(["gemini-3.8-flash", ...GEMINI_FALLBACKS]);
+    expect(r).toMatchObject({ text: "Minuta", model: GEMINI_FALLBACKS[1] });
+  });
+
+  it("does not move to another model when the request itself is wrong, or an answer had started", async () => {
+    const asked: string[] = [];
+    const rejecting = (async (url: string) => {
+      asked.push(url);
+      return new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "x" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+    await expect(gemini(rejecting).complete(req, { apiKey: "g", model: "gemini-3.8-flash" })).rejects.toMatchObject({ code: "rejected" });
+    expect(asked).toHaveLength(1);
+    const halfway = (async () => sse([{ candidates: [{ content: { parts: [{ text: "Medio" }] } }] }, { error: { status: "UNAVAILABLE", code: 503 } }])) as unknown as typeof fetch;
+    await expect(gemini(halfway).complete(req, { apiKey: "g", model: "gemini-3.8-flash" })).rejects.toMatchObject({ code: "overloaded", partial: true });
+  });
+
+  it("gives up on a provider that holds the connection without answering", async () => {
+    const silent = ((_url: string, init: RequestInit) =>
+      new Promise((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))))) as unknown as typeof fetch;
+    await expect(llmCall("gemini", silent, "https://x", {}, 5_000, 20)).rejects.toMatchObject({ code: "overloaded", message: "gemini did not start answering" });
+  });
+
   it("knows an invalid key behind Gemini's 400", async () => {
     const fetcher = (async () => new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "API key not valid." } }), { status: 400 })) as unknown as typeof fetch;
     await expect(gemini(fetcher).complete(req, { apiKey: "g", model: "m" })).rejects.toMatchObject({ code: "invalid_key" });
@@ -193,6 +227,15 @@ describe("Gemini adapter", () => {
 });
 
 describe("prompt helpers", () => {
+  it("write in the transcript's language, not the screen's", () => {
+    const tr = (language: string | null, ...texts: string[]) => ({ ...transcript(), language, blocks: texts.map((text, i) => ({ speaker: i % 2, start: i, end: i + 1, text })) });
+    expect(contentLanguage(tr("es", "Hello"), "en")).toBe("es");
+    expect(contentLanguage(tr("en-US", "Hola"), "es")).toBe("en");
+    expect(contentLanguage(tr(null, "Buenos días a todos, empecemos con la agenda de la sesión.", "Gracias, el informe de la tesorería está en el acta."), "en")).toBe("es");
+    expect(contentLanguage(tr("multi", "Good morning, this is the budget and we have the report for the board.", "Thanks, that is what we need."), "es")).toBe("en");
+    expect(contentLanguage(tr("pt", "Bom dia"), "es")).toBe("es");
+  });
+
   it("merge consecutive blocks of a voice into one line with its time", () => {
     const tr = transcript();
     tr.blocks.push({ speaker: 1, start: 9.5, end: 12, text: "Primer punto." });

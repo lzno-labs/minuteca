@@ -132,6 +132,19 @@ describe("choosing the model per generation", () => {
   });
 });
 
+describe("minutes language", () => {
+  it("follows the transcript, even when the browser asks for English", async () => {
+    const claude = fakeLlm("anthropic");
+    t = setup({ llm: { anthropic: claude } });
+    const { cookie, id } = await transcribedMeeting();
+    await useClaude(cookie);
+    const r = await t.fetch(`/api/meetings/${id}/minutes`, { method: "POST", cookie, body: "{}", headers: { "Accept-Language": "en-US,en;q=0.9" } });
+    expect(r.status).toBe(200);
+    expect(claude.calls[0]!.req.system).toContain("en español");
+    expect(claude.calls[0]!.req.prompt).toContain("Reunión:");
+  });
+});
+
 describe("minutes", () => {
   it("are written from the transcript with the names, saved, edited and exported", async () => {
     const claude = fakeLlm("anthropic");

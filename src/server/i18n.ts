@@ -6,6 +6,9 @@ type Table = Record<string, unknown>;
 const TABLES: Record<string, Table> = { es, en };
 export const DEFAULT_LANG = "es";
 
+/** Whether texts (and prompts) exist in this language: "es", "en". */
+export const hasLanguage = (code: string): boolean => Boolean(TABLES[code]);
+
 /** Picks a supported language from an Accept-Language header; Spanish by default. */
 export function pickLanguage(header: string | null | undefined): string {
   for (const part of (header ?? "").split(",")) {

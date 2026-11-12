@@ -5,7 +5,7 @@ import { anthropic } from "../../src/server/llm/anthropic.ts";
 import { gemini, GEMINI_FALLBACKS, thinkingLevel } from "../../src/server/llm/gemini.ts";
 import { llmCall, LlmError } from "../../src/server/llm/llm.ts";
 import { localChat, openaiChat, openrouter } from "../../src/server/llm/openai-chat.ts";
-import { firstJsonObject, parseSuggestions, transcriptLines } from "../../src/server/minutes.ts";
+import { contentLanguage, firstJsonObject, parseSuggestions, transcriptLines } from "../../src/server/minutes.ts";
 import { keepAlive } from "../../src/server/app.ts";
 import { transcript } from "./helpers.ts";
 
@@ -227,6 +227,15 @@ describe("Gemini adapter", () => {
 });
 
 describe("prompt helpers", () => {
+  it("write in the transcript's language, not the screen's", () => {
+    const tr = (language: string | null, ...texts: string[]) => ({ ...transcript(), language, blocks: texts.map((text, i) => ({ speaker: i % 2, start: i, end: i + 1, text })) });
+    expect(contentLanguage(tr("es", "Hello"), "en")).toBe("es");
+    expect(contentLanguage(tr("en-US", "Hola"), "es")).toBe("en");
+    expect(contentLanguage(tr(null, "Buenos días a todos, empecemos con la agenda de la sesión.", "Gracias, el informe de la tesorería está en el acta."), "en")).toBe("es");
+    expect(contentLanguage(tr("multi", "Good morning, this is the budget and we have the report for the board.", "Thanks, that is what we need."), "es")).toBe("en");
+    expect(contentLanguage(tr("pt", "Bom dia"), "es")).toBe("es");
+  });
+
   it("merge consecutive blocks of a voice into one line with its time", () => {
     const tr = transcript();
     tr.blocks.push({ speaker: 1, start: 9.5, end: 12, text: "Primer punto." });

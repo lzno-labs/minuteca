@@ -4,7 +4,7 @@
  * model: it checks the person's permission for that provider, uses their own key (or the local
  * model the server administrator set up), and writes the tokens to the usage ledger.
  */
-import { t } from "./i18n.ts";
+import { hasLanguage, t } from "./i18n.ts";
 import type { KeyVault } from "./keys.ts";
 import { isLlmProvider, LlmError, type LlmAdapter, type LlmProviderId, type LlmRequest, type LlmResult } from "./llm/llm.ts";
 import type { MeetingRow, MinutesRow, Store, User } from "./storage/store.ts";
@@ -88,6 +88,32 @@ const clock = (s: number) => {
   return h ? `${h}:${pad(m)}:${pad(total % 60)}` : `${pad(m)}:${pad(total % 60)}`;
 };
 
+/** Frequent short words, to tell the language of a transcript that does not say it. */
+const COMMON: Record<string, Set<string>> = {
+  es: new Set("el la los las de del que y en un una es se no por para con lo como pero más este esta eso hay muy también".split(" ")),
+  en: new Set("the and of to is that it you for we this with have are was be not on but they what so there just".split(" ")),
+};
+
+/**
+ * The language the minutes are written in: the transcript's, not the screen's (a person whose
+ * browser is in English still gets Spanish minutes for a meeting held in Spanish). The language the
+ * provider reported, else a count of frequent words, else the person's language.
+ */
+export function contentLanguage(tr: Transcript, fallback: string): string {
+  const said = (tr.language ?? "").slice(0, 2).toLowerCase();
+  if (hasLanguage(said)) return said;
+  const counts: Record<string, number> = {};
+  let seen = 0;
+  for (const b of tr.blocks) {
+    for (const w of b.text.toLowerCase().split(/[^\p{L}]+/u)) {
+      for (const [lang, words] of Object.entries(COMMON)) if (words.has(w)) counts[lang] = (counts[lang] ?? 0) + 1;
+    }
+    if (++seen >= 400) break;
+  }
+  const [best, n] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+  return n >= 5 && hasLanguage(best) ? best : fallback;
+}
+
 /** "Persona 1", "Persona 2"...: the label the app shows for a voice without a name. */
 const defaultName = (lang: string, speaker: number) => t(lang, "speakers.default", { n: speaker + 1 });
 
@@ -166,8 +192,9 @@ export function parseSuggestions(raw: unknown, speakers: Set<number>): SpeakerSu
 }
 
 /** Asks the model who each voice is, from what people say ("Gracias, Marco"). Nothing is saved: the person picks. */
-export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: string, lang: string, provider?: unknown) {
+export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: string, uiLang: string, provider?: unknown) {
   const { m, tr } = await transcribed(deps, user, meetingId);
+  const lang = contentLanguage(tr, uiLang);
   const speakers = new Set(tr.blocks.map((b) => b.speaker));
   const label = (s: number) => `S${s}`;
   const result = await runLlm(deps, user, {
@@ -190,8 +217,9 @@ export async function suggestSpeakers(deps: MinutesDeps, user: User, meetingId: 
 }
 
 /** Writes the minutes from the transcript with the people's names, and saves them as a new version. */
-export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: string, lang: string, provider?: unknown) {
+export async function generateMinutes(deps: MinutesDeps, user: User, meetingId: string, uiLang: string, provider?: unknown) {
   const { m, tr, names } = await transcribed(deps, user, meetingId);
+  const lang = contentLanguage(tr, uiLang);
   const label = (s: number) => names[String(s)]?.trim() || defaultName(lang, s);
   const participants = [...new Set(tr.blocks.map((b) => label(b.speaker)))];
   const locale = t(lang, "meta.locale");
@@ -263,7 +291,7 @@ export async function reviseMinutes(
   user: User,
   meetingId: string,
   versionId: number,
-  lang: string,
+  uiLang: string,
   req: { instruction?: unknown; part?: unknown; provider?: unknown },
 ): Promise<MinutesRow> {
   const instruction = typeof req.instruction === "string" ? req.instruction.trim() : "";
@@ -271,6 +299,7 @@ export async function reviseMinutes(
   if (req.part !== undefined && (typeof req.part !== "string" || !req.part.trim())) throw new MinutesError("invalid_instruction", 400);
   const part = req.part as string | undefined;
   const { m, tr, names } = await transcribed(deps, user, meetingId);
+  const lang = contentLanguage(tr, uiLang);
   const current = await deps.store.minutes(m.id, versionId);
   if (!current) throw new MinutesError("not_found", 404);
   const start = part === undefined ? 0 : current.body.indexOf(part);

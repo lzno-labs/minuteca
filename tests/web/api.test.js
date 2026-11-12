@@ -20,6 +20,7 @@ describe("api client", () => {
     vi.stubGlobal("fetch", async () => new Response(' {"error":"llm_rejected","detail":"anthropic 400 invalid_request_error","errorStatus":502}', { status: 200 }));
     const e = await api("/meetings/m/minutes", { method: "POST" }).catch((x) => x);
     expect(e).toMatchObject({ code: "llm_rejected", detail: "anthropic 400 invalid_request_error" });
-    expect(e.message).toMatch(/rechazó la solicitud.*\(anthropic 400 invalid_request_error\)$/);
+    expect(e.message).toMatch(/\S.* \(anthropic 400 invalid_request_error\)$/);
+    expect(e.message).not.toMatch(/^llm_rejected/);
   });
 });

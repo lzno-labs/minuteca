@@ -616,9 +616,10 @@ export function createApp(deps: Deps) {
       } catch (e) {
         if (e instanceof MinutesError) return err(c, e.status, e.code);
         if (e instanceof LlmError) {
-          // Provider, HTTP status and the provider's error code only (see LlmError).
+          // Provider, HTTP status and the provider's error type only (see LlmError): logged, and
+          // shown as a detail the person can pass on.
           console.error("llm", e.code, e.message);
-          return err(c, 502, `llm_${e.code}`);
+          return c.json({ error: `llm_${e.code}`, detail: e.message }, 502);
         }
         console.error("llm route", (e as Error).message);
         return err(c, 500, "generic");

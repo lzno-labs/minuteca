@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
-import type Anthropic from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "../../src/server/llm/anthropic.ts";
 import { gemini, thinkingLevel } from "../../src/server/llm/gemini.ts";
 import { LlmError } from "../../src/server/llm/llm.ts";
@@ -11,13 +11,26 @@ import { transcript } from "./helpers.ts";
 
 const req = { system: "sys", prompt: "hola", maxTokens: 100 };
 
-/** Just enough of the Anthropic client for the adapter. */
-function fakeClaude(message: Record<string, unknown>, sent: unknown[] = []) {
+/** Just enough of the Anthropic client for the adapter; `answers` can throw, one per request in order. */
+function fakeClaude(message: Record<string, unknown>, sent: unknown[] = [], answers: (Error | null)[] = []) {
   return (() => ({
-    beta: { messages: { stream: (p: unknown) => (sent.push(p), { finalMessage: async () => message }) } },
+    beta: {
+      messages: {
+        stream: (p: unknown) => {
+          sent.push(p);
+          const answer = answers.shift();
+          return { finalMessage: async () => (answer ? Promise.reject(answer) : message) };
+        },
+      },
+    },
     models: { list: async () => ({ data: [] }) },
   })) as unknown as (k: string) => Anthropic;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ErrorClass = new (status: any, error: object, message: undefined, headers: Headers) => Error;
+const apiError = (Kind: ErrorClass, status: number, type: string, message = "details from Anthropic") =>
+  new Kind(status, { type: "error", error: { type, message } }, undefined, new Headers());
 
 describe("Claude adapter", () => {
   it("streams with effort and refusal fallbacks, and joins the text blocks", async () => {
@@ -32,6 +45,28 @@ describe("Claude adapter", () => {
   it("reports a refusal instead of an empty answer", async () => {
     const a = anthropic(fakeClaude({ model: "m", stop_reason: "refusal", content: [], usage: { input_tokens: 1, output_tokens: 0 } }));
     await expect(a.complete(req, { apiKey: "k", model: "m" })).rejects.toMatchObject({ code: "refused" });
+  });
+
+  it("asks once more without effort and fallbacks when a model rejects them", async () => {
+    const sent: any[] = [];
+    const ok = { model: "claude-haiku-5-5", stop_reason: "end_turn", content: [{ type: "text", text: "Hola" }], usage: { input_tokens: 3, output_tokens: 1 } };
+    const a = anthropic(fakeClaude(ok, sent, [apiError(Anthropic.BadRequestError, 400, "invalid_request_error")]));
+    const r = await a.complete({ ...req, effort: "low" }, { apiKey: "k", model: "claude-haiku-5-5" });
+    expect(r.text).toBe("Hola");
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toEqual({ model: "claude-haiku-5-5", max_tokens: 100, system: "sys", messages: [{ role: "user", content: "hola" }] });
+  });
+
+  it("says what failed: status and error type, never Anthropic's text", async () => {
+    const fail = (...errors: Error[]) => anthropic(fakeClaude({}, [], errors)).complete(req, { apiKey: "k", model: "m" }).catch((e) => e);
+    const twice = await fail(apiError(Anthropic.BadRequestError, 400, "invalid_request_error"), apiError(Anthropic.BadRequestError, 400, "invalid_request_error"));
+    expect(twice).toMatchObject({ code: "rejected", message: "anthropic 400 invalid_request_error" });
+    expect(await fail(apiError(Anthropic.InternalServerError, 529, "overloaded_error"))).toMatchObject({ code: "overloaded", message: "anthropic 529 overloaded_error" });
+    expect(await fail(apiError(Anthropic.BadRequestError, 400, "invalid_request_error", "prompt is too long: 1200000 tokens > 1000000 maximum"))).toMatchObject({ code: "too_long" });
+    expect(await fail(apiError(Anthropic.AuthenticationError, 401, "authentication_error"))).toMatchObject({ code: "invalid_key" });
+    expect(await fail(new Anthropic.APIConnectionError({ message: "fetch failed" }))).toMatchObject({ code: "unavailable", message: "anthropic unreachable" });
+    expect(JSON.stringify(twice)).not.toContain("details from Anthropic");
+    expect(twice.message).not.toContain("details");
   });
 });
 
@@ -115,7 +150,7 @@ describe("Gemini adapter", () => {
     await expect(run(() => sse([{ candidates: [{ content: { parts: [] }, finishReason: "MAX_TOKENS" }] }]))).rejects.toMatchObject({ code: "too_long" });
     await expect(run(() => sse([{ candidates: [{ finishReason: "SAFETY" }] }]))).rejects.toMatchObject({ code: "refused" });
     await expect(run(() => sse([{ promptFeedback: { blockReason: "OTHER" } }]))).rejects.toMatchObject({ code: "refused" });
-    await expect(run(() => sse([{ error: { status: "UNAVAILABLE", code: 503 } }]))).rejects.toMatchObject({ code: "unavailable", message: "gemini stream UNAVAILABLE" });
+    await expect(run(() => sse([{ error: { status: "UNAVAILABLE", code: 503 } }]))).rejects.toMatchObject({ code: "overloaded", message: "gemini stream UNAVAILABLE" });
     const broken = () => new Response(new ReadableStream({ pull(c) { c.error(new Error("Network connection lost")); } }));
     await expect(run(broken)).rejects.toMatchObject({ code: "unavailable", message: "gemini stream broke off" });
   });
@@ -128,12 +163,27 @@ describe("Gemini adapter", () => {
     await expect(gemini(answer(400, { status: "INVALID_ARGUMENT", message: "The input token count exceeds the maximum." })).complete(req, { apiKey: "g", model: "m" }))
       .rejects.toMatchObject({ code: "too_long" });
     await expect(gemini(answer(503, { status: "UNAVAILABLE", message: "The model is overloaded." })).complete(req, { apiKey: "g", model: "m" }))
-      .rejects.toMatchObject({ code: "unavailable", message: "gemini 503 UNAVAILABLE" });
+      .rejects.toMatchObject({ code: "overloaded", message: "gemini 503 UNAVAILABLE" });
     await expect(gemini(answer(400, { status: "INVALID_ARGUMENT", message: "API key not valid." })).checkKey("g")).resolves.toBe(false);
     const openaiRegion = answer(403, { code: "unsupported_country_region_territory", message: "Country not supported" });
     await expect(openaiChat(openaiRegion).complete(req, { apiKey: "k", model: "m" })).rejects.toMatchObject({ code: "region", message: "openai 403 unsupported_country_region_territory" });
     await expect(openaiChat(openaiRegion).checkKey("k")).rejects.toMatchObject({ code: "region" });
     await expect(openaiChat(answer(403, { code: "forbidden" })).checkKey("k")).resolves.toBe(false);
+  });
+
+  it("asks once more with the model's default thinking when a model rejects the level", async () => {
+    const bodies: any[] = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      if (bodies.length === 1) return new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "Thinking level MEDIUM is not supported for this model." } }), { status: 400 });
+      return sse([{ candidates: [{ content: { parts: [{ text: "Hola" }] }, finishReason: "STOP" }] }]);
+    }) as unknown as typeof fetch;
+    const r = await gemini(fetcher).complete({ ...req, effort: "medium" }, { apiKey: "g", model: "gemini-3.5-pro" });
+    expect(r.text).toBe("Hola");
+    expect(bodies[0].generationConfig.thinkingConfig).toEqual({ thinkingLevel: "MEDIUM" });
+    expect(bodies[1].generationConfig.thinkingConfig).toBeUndefined();
+    const always = (async () => new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "x" } }), { status: 400 })) as unknown as typeof fetch;
+    await expect(gemini(always).complete({ ...req, effort: "low" }, { apiKey: "g", model: "gemini-3.5-pro" })).rejects.toMatchObject({ code: "rejected", message: "gemini 400 INVALID_ARGUMENT" });
   });
 
   it("knows an invalid key behind Gemini's 400", async () => {

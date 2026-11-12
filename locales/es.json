@@ -406,7 +406,9 @@
     "engine_failed": "El motor de transcripción se detuvo. Intenta de nuevo; si sigue, reinicia la app.",
     "minutes_changed": "La minuta cambió mientras tanto. Vuelve a intentarlo.",
     "invalid_instruction": "Escribe qué quieres cambiar (hasta 2000 caracteres).",
-    "invalid_auto": "Opción no válida."
+    "invalid_auto": "Opción no válida.",
+    "llm_rejected": "El proveedor rechazó la solicitud. Si cambiaste el modelo en Ajustes, prueba con el predeterminado.",
+    "llm_overloaded": "El proveedor está saturado o falló de su lado. Intenta de nuevo en unos minutos."
   },
   "mail": {
     "signIn": {

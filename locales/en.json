@@ -406,7 +406,9 @@
     "engine_failed": "The transcription engine stopped. Try again; if it keeps happening, restart the app.",
     "minutes_changed": "The minutes changed in the meantime. Try again.",
     "invalid_instruction": "Write what you want changed (up to 2000 characters).",
-    "invalid_auto": "Invalid option."
+    "invalid_auto": "Invalid option.",
+    "llm_rejected": "The provider rejected the request. If you changed the model in Settings, try the default one.",
+    "llm_overloaded": "The provider is overloaded or failed on its side. Try again in a few minutes."
   },
   "mail": {
     "signIn": {

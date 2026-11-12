@@ -67,23 +67,30 @@ export function gemini(fetcher: Fetcher = fetch): LlmAdapter {
     needsKey: true,
     async complete(req, { apiKey, model }) {
       const level = thinkingLevel(model, req.effort);
-      const body = {
-        systemInstruction: { parts: [{ text: req.system }] },
-        contents: [{ role: "user", parts: [{ text: req.prompt }] }],
-        generationConfig: {
-          maxOutputTokens: req.maxTokens,
-          ...(req.json ? { responseMimeType: "application/json" } : {}),
-          ...(level ? { thinkingConfig: { thinkingLevel: level } } : {}),
-        },
-      };
-      // Streamed, so the connection is never silent while the model thinks: Cloudflare drops a
-      // subrequest that sends nothing for about 100 seconds.
-      const r = await llmCall("gemini", fetcher, `${API}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) throw await geminiError(r);
+      const send = (thinking: string | undefined) =>
+        // Streamed, so the connection is never silent while the model thinks: Cloudflare drops a
+        // subrequest that sends nothing for about 100 seconds.
+        llmCall("gemini", fetcher, `${API}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: req.system }] },
+            contents: [{ role: "user", parts: [{ text: req.prompt }] }],
+            generationConfig: {
+              maxOutputTokens: req.maxTokens,
+              ...(req.json ? { responseMimeType: "application/json" } : {}),
+              ...(thinking ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
+            },
+          }),
+        });
+      let r = await send(level);
+      if (!r.ok) {
+        const e = await geminiError(r);
+        // A model chosen in Settings may not take that thinking level: once more with its default.
+        if (e.code !== "rejected" || !level) throw e;
+        r = await send(undefined);
+        if (!r.ok) throw await geminiError(r);
+      }
       if (!r.body) throw new LlmError("unavailable", "gemini 200 without a body");
       let text = "";
       let finish = "";
@@ -92,7 +99,10 @@ export function gemini(fetcher: Fetcher = fetch): LlmAdapter {
       let version = model;
       try {
         for await (const chunk of sseChunks(r.body)) {
-          if (chunk.error) throw new LlmError(chunk.error.status === "RESOURCE_EXHAUSTED" ? "rate_limited" : "unavailable", `gemini stream ${chunk.error.status ?? chunk.error.code ?? "error"}`);
+          if (chunk.error) {
+            const code = chunk.error.status === "RESOURCE_EXHAUSTED" ? "rate_limited" : chunk.error.status === "UNAVAILABLE" || chunk.error.status === "INTERNAL" ? "overloaded" : "unavailable";
+            throw new LlmError(code, `gemini stream ${chunk.error.status ?? chunk.error.code ?? "error"}`);
+          }
           const candidate = chunk.candidates?.[0];
           for (const part of candidate?.content?.parts ?? []) if (!part.thought) text += part.text ?? "";
           if (candidate?.finishReason) finish = candidate.finishReason;

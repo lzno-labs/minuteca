@@ -15,4 +15,11 @@ describe("api client", () => {
     vi.stubGlobal("fetch", async () => new Response('{"error":"no_llm_consent"}', { status: 403 }));
     await expect(api("/x")).rejects.toMatchObject({ code: "no_llm_consent", status: 403 });
   });
+
+  it("shows what the provider said, as status and error type, after the message", async () => {
+    vi.stubGlobal("fetch", async () => new Response(' {"error":"llm_rejected","detail":"anthropic 400 invalid_request_error","errorStatus":502}', { status: 200 }));
+    const e = await api("/meetings/m/minutes", { method: "POST" }).catch((x) => x);
+    expect(e).toMatchObject({ code: "llm_rejected", detail: "anthropic 400 invalid_request_error" });
+    expect(e.message).toMatch(/rechazó la solicitud.*\(anthropic 400 invalid_request_error\)$/);
+  });
 });

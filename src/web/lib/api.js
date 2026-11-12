@@ -2,10 +2,12 @@
 import { t } from "../i18n";
 
 export class ApiError extends Error {
-  constructor(code, status) {
-    super(messageFor(code, status));
+  /** detail: what the server can say about a provider's error ("anthropic 400 invalid_request_error"), shown after the message. */
+  constructor(code, status, detail) {
+    super(detail ? `${messageFor(code, status)} (${detail})` : messageFor(code, status));
     this.code = code;
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -32,7 +34,7 @@ export async function api(path, { method = "GET", body, signal } = {}) {
   }
   const data = await res.json().catch(() => ({}));
   // Slow answers (language models) arrive as 200 with the error's real status in errorStatus.
-  if (!res.ok || data.errorStatus) throw new ApiError(data.error || "generic", data.errorStatus || res.status);
+  if (!res.ok || data.errorStatus) throw new ApiError(data.error || "generic", data.errorStatus || res.status, typeof data.detail === "string" ? data.detail.slice(0, 120) : undefined);
   return data;
 }
 

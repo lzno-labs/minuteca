@@ -5,12 +5,18 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, net, powerSaveBlocker, safeS
 import { autoUpdater } from "electron-updater";
 import en from "../../locales/en.json" with { type: "json" };
 import es from "../../locales/es.json" with { type: "json" };
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { constants, createWriteStream, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { access, mkdtemp, readdir, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { execFile, spawn } from "node:child_process";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
 import { availableParallelism, cpus, totalmem } from "node:os";
 import { CREDITS, speechModel } from "../engine/models.ts";
 import { catalog } from "../engine/recommend.ts";
-import { accessToken, challengeOf, DEFAULT_SERVER, errorCode, externalAllowed, isMeetingId, linkInArgs, newVerifier, sameOrigin, serverOrigin } from "./core.ts";
+import { accessToken, bundleOf, challengeOf, DEFAULT_SERVER, errorCode, externalAllowed, type FeedFile, isMeetingId, linkInArgs, macArchive, newVerifier, releaseFileUrl, replaceable, sameOrigin, serverOrigin, SWAP_SCRIPT } from "./core.ts";
 
 /** Set by build.mjs: true only for Mac builds with a Developer ID signature, which macOS lets update themselves. */
 declare const __MAC_SIGNED__: boolean;
@@ -271,8 +277,12 @@ ipcMain.on("desktop:cancel", (e) => {
 
 type UpdateState = { status: "dev" | "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error"; version?: string };
 let update: UpdateState = { status: app.isPackaged ? "idle" : "dev" };
-// macOS only installs updates of apps with a Developer ID signature; unsigned builds get a download link.
+// macOS's updater (Squirrel) only installs apps with a Developer ID signature. Until ours has one, the
+// Mac app downloads the release's ZIP itself, checks it and swaps itself on restart (docs/adr/0008).
 const canInstall = process.platform !== "darwin" || __MAC_SIGNED__;
+const selfUpdate = process.platform === "darwin" && !__MAC_SIGNED__;
+let staged: { bundle: string; next: string; work: string } | null = null;
+let swapping = false;
 let prompted = "";
 let promptAfterJob = false;
 
@@ -295,11 +305,68 @@ async function offer() {
   const w = words();
   if (update.status === "ready") {
     const r = await dialog.showMessageBox(win, { type: "info", message: fill(w.readyDialog, update.version), buttons: [w.restart, w.later], defaultId: 0, cancelId: 1 });
-    if (r.response === 0) autoUpdater.quitAndInstall();
+    if (r.response === 0) installNow();
   } else if (update.status === "available") {
     const r = await dialog.showMessageBox(win, { type: "info", message: fill(w.availableDialog, update.version), buttons: [w.download, w.later], defaultId: 0, cancelId: 1 });
     if (r.response === 0) void shell.openExternal(`${ORIGIN}/descargar`);
   }
+}
+
+function installNow() {
+  if (canInstall) autoUpdater.quitAndInstall();
+  else if (staged) swapAndQuit(true);
+}
+
+const run = promisify(execFile);
+
+/**
+ * Downloads this Mac's archive of a new version next to the app (same disk, so the swap is a rename),
+ * checks its SHA-512 against latest-mac.yml and the app's own signature, and keeps it ready for the
+ * restart. False when the app cannot replace itself where it is: then the person gets the download link.
+ */
+async function stageMacUpdate(version: string, files: readonly FeedFile[] | undefined): Promise<boolean> {
+  const bundle = bundleOf(process.execPath);
+  const file = macArchive(files, process.arch);
+  const url = file && releaseFileUrl(version, file.url);
+  if (!bundle || !replaceable(bundle) || !file || !url) return false;
+  try {
+    await access(dirname(bundle), constants.W_OK);
+    await access(bundle, constants.W_OK);
+  } catch {
+    return false;
+  }
+  setUpdate({ status: "downloading", version });
+  const work = await mkdtemp(join(dirname(bundle), ".minuteca-update-"));
+  try {
+    const res = await net.fetch(url);
+    if (!res.ok || !res.body) throw new Error(`download HTTP ${res.status}`);
+    const zip = join(work, file.url);
+    const hash = createHash("sha512");
+    const count = new Transform({ transform: (chunk, _enc, done) => (hash.update(chunk), done(null, chunk)) });
+    await pipeline(Readable.fromWeb(res.body as import("node:stream/web").ReadableStream), count, createWriteStream(zip));
+    if (hash.digest("base64") !== file.sha512) throw new Error("the download does not match latest-mac.yml");
+    await run("/usr/bin/ditto", ["-x", "-k", zip, work]);
+    await rm(zip);
+    const next = join(work, "minuteca.app");
+    await run("/usr/bin/codesign", ["--verify", "--deep", next]);
+    staged = { bundle, next, work };
+    return true;
+  } catch (err) {
+    await rm(work, { recursive: true, force: true });
+    throw err;
+  }
+}
+
+/** Hands the swap to a small script that waits for this process to end. */
+function swapAndQuit(reopen: boolean) {
+  if (!staged || swapping) return;
+  swapping = true;
+  spawn("/bin/sh", ["-c", SWAP_SCRIPT], {
+    detached: true,
+    stdio: "ignore",
+    env: { PATH: "/usr/bin:/bin", PID: String(process.pid), APP: staged.bundle, NEXT: staged.next, WORK: staged.work, REOPEN: reopen ? "1" : "0" },
+  }).unref();
+  if (reopen) app.quit();
 }
 
 async function checkUpdates(): Promise<UpdateState> {
@@ -313,15 +380,37 @@ async function checkUpdates(): Promise<UpdateState> {
   return update;
 }
 
+/** Leftovers of an update staged but never swapped in (the computer turned off, the app was killed). */
+async function cleanStagedLeftovers() {
+  const bundle = bundleOf(process.execPath);
+  if (!selfUpdate || !bundle) return;
+  const dir = dirname(bundle);
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    if (name.startsWith(".minuteca-update-")) await rm(join(dir, name), { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 function setupUpdates() {
   if (!app.isPackaged) return;
+  void cleanStagedLeftovers();
   autoUpdater.autoDownload = canInstall;
   autoUpdater.autoInstallOnAppQuit = canInstall;
   autoUpdater.on("checking-for-update", () => setUpdate({ status: "checking" }));
   autoUpdater.on("update-not-available", () => setUpdate({ status: "current", version: app.getVersion() }));
   autoUpdater.on("update-available", (i) => {
-    setUpdate({ status: canInstall ? "downloading" : "available", version: i.version });
-    if (!canInstall) void offer();
+    if (canInstall) return setUpdate({ status: "downloading", version: i.version });
+    if (selfUpdate && staged === null && update.status !== "downloading") {
+      stageMacUpdate(i.version, i.files as FeedFile[])
+        .then((ok) => setUpdate({ status: ok ? "ready" : "available", version: i.version }))
+        .catch((e) => {
+          console.error("mac update", (e as Error).message);
+          setUpdate({ status: "available", version: i.version });
+        })
+        .finally(() => void offer());
+      return;
+    }
+    if (!staged) setUpdate({ status: "available", version: i.version });
+    void offer();
   });
   autoUpdater.on("update-downloaded", (i) => {
     setUpdate({ status: "ready", version: i.version });
@@ -339,7 +428,7 @@ ipcMain.handle("desktop:info", (e) => (fromServer(e) ? { value: { version: app.g
 ipcMain.handle("desktop:checkUpdates", async (e) => (fromServer(e) ? { value: await checkUpdates() } : { error: "generic" }));
 ipcMain.handle("desktop:installUpdate", (e) => {
   if (!fromServer(e)) return { error: "generic" };
-  if (update.status === "ready") autoUpdater.quitAndInstall();
+  if (update.status === "ready") installNow();
   else if (update.status === "available") void shell.openExternal(`${ORIGIN}/descargar`);
   return { value: true };
 });
@@ -398,6 +487,8 @@ if (!app.requestSingleInstanceLock()) {
     void openLink(linkInArgs(process.argv));
     app.on("activate", () => BrowserWindow.getAllWindows().length === 0 && createWindow());
   });
+  // An update ready on a Mac without a Developer ID goes in when the app quits, like on Windows.
+  app.on("will-quit", () => swapAndQuit(false));
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });

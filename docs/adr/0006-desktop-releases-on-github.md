@@ -1,6 +1,6 @@
 # ADR-0006: Desktop releases and updates on GitHub
 
-- **Status:** Accepted
+- **Status:** Accepted; Mac updates superseded by ADR-0008
 - **Date:** 2026-11-11
 - **Supersedes:** ADR-0005, distribution only (the rest of ADR-0005 stands)
 - **Author:** founding agent (claude)

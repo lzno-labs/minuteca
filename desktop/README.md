@@ -6,7 +6,7 @@ The minuteca app for Mac and Windows ([ADR 0005](../docs/adr/0005-desktop-app-an
 
 ## Install
 
-Download it from [minuteca.lzno.app/descargar](https://minuteca.lzno.app/descargar) or from this repo's [releases](https://github.com/lzno-labs/minuteca/releases). The app checks the releases at start and every 6 hours: Windows updates itself after asking to restart; Mac does too once it carries a Developer ID signature, and until then it points to the download page. Settings shows the version and "Buscar actualizaciones".
+Download it from [minuteca.lzno.app/descargar](https://minuteca.lzno.app/descargar) or from this repo's [releases](https://github.com/lzno-labs/minuteca/releases). The app checks the releases at start and every 6 hours, downloads a new version in the background and installs it when you restart it (on Mac, from 0.1.3, by replacing itself until it carries a Developer ID signature: ADR 0008). Settings shows the version and "Buscar actualizaciones".
 
 - **Mac:** open the `.dmg` for your Mac (`arm64` for Apple chips, `x64` for Intel) and drag minuteca to Applications. Until the app carries a Developer ID signature, macOS blocks it the first time: open it once, then System Settings, Privacy & Security, "Open Anyway".
 - **Windows:** run `minuteca-windows-x64.exe`. It is not signed yet, so SmartScreen warns once: "More info", "Run anyway". Updates the app downloads itself do not warn.
